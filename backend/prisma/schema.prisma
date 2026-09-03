@@ -19,11 +19,64 @@ model User {
   id        String   @id @default(uuid())
   email     String   @unique
   password  String
-  name      String   @unique
+  name      String   // 👈 Removido o @unique para permitir voluntários homônimos
   role      Role     @default(USER)
+  avatar    String?  // Pode ser a foto do voluntário ou o logo da ONG
 
-  avatar    String?  @default("default.png")
+  // ==========================================
+  // CAMPOS COMPARTILHADOS (Voluntário e ONG)
+  // ==========================================
+  // Endereço
+  cep           String?
+  logradouro    String?
+  numero        String?
+  bairro        String?
+  cidade        String?
+  estado        String?
 
+  // Conformidade Legal
+  aceiteTermos  Boolean   @default(false)
+  aceiteLgpd    Boolean   @default(false)
+
+  // ==========================================
+  // CAMPOS EXCLUSIVOS: VOLUNTÁRIO (Role.USER)
+  // ==========================================
+  tipoDocumento   String?
+  cpf             String?   @unique
+  nascimento      String?
+  telefone        String?   // Telefone pessoal do voluntário
+  bio             String?
+  habilidades     String[]  // Habilidades que o voluntário possui
+  disponibilidade String[]  // Disponibilidade do voluntário (Manhã, Tarde, etc.)
+
+  // ==========================================
+  // CAMPOS EXCLUSIVOS: ONG (Role.ONG)
+  // ==========================================
+  // Identificação
+  razaoSocial       String?
+  cnpj              String?   @unique
+  anoFundacao       Int?
+  site              String?
+  
+  // Contato ONG
+  telefoneFixo      String?
+  whatsapp          String?
+  instagram         String?
+  facebook          String?
+  tiktok            String?
+  
+  // Detalhes e Essência
+  causaPrincipal      String?
+  servicosOferecidos  String[]
+  publicoAtendido     String[]
+  descricao           String?
+  
+  // Necessidades da ONG
+  habilidadesBuscadas String[]
+  formatoVoluntariado String?   // 👈 Modificado para opcional (?)
+  aceitaDoacoes       String[]
+  
+  // ==========================================
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

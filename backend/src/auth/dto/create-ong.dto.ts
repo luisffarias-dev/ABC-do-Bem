@@ -1,24 +1,86 @@
-import { IsEmail, IsString, MinLength, IsNotEmpty, MaxLength, Matches} from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { IsEmail, IsString, IsNotEmpty, IsOptional, Matches, IsArray, MinLength, IsBoolean, Equals } from 'class-validator';
 
 export class CreateOngDto {
-  @ApiProperty({ example: 'ABC do Bem' })
+  // --- Etapa 1 ---
+  @IsNotEmpty({ message: 'A razão social é obrigatória' })
   @IsString()
-  @IsNotEmpty()
-  @Transform(({ value }) => value?.trim())
-  @MaxLength(90, { message: 'O Nome não pode ter mais de 30 caracteres' })
-  @Matches(/^[a-zA-Z0-9_ ]+$/, { message: 'O nome só pode conter letras, números, espaços e underline' })
+  razaoSocial: string;
+
+  @IsNotEmpty({ message: 'O nome fantasia é obrigatório' })
+  @IsString()
   name: string;
 
-  @ApiProperty({ example: 'abcdobem@abcdobem.com' })
-  @IsEmail({}, { message: 'Formato de e-mail inválido' })
-  @Transform(({ value }) => value.toLowerCase().trim()) // 👈 Normaliza o e-mail
+  @IsNotEmpty({ message: 'O CNPJ é obrigatório' })
+  @Matches(/^\d{2}\.\d{3}\.\d{3}\/\d{4}\-\d{2}$/, { message: 'CNPJ inválido' })
+  cnpj: string;
+
+  @IsNotEmpty({ message: 'O ano de fundação é obrigatório' })
+  anoFundacao: number;
+
+  @IsOptional() @IsString() site?: string;
+
+  @IsNotEmpty({ message: 'O telefone fixo é obrigatório' })
+  telefoneFixo: string;
+
+  @IsNotEmpty({ message: 'O WhatsApp é obrigatório' })
+  whatsapp: string;
+
+  @IsOptional() instagram?: string;
+  @IsOptional() facebook?: string;
+  @IsOptional() tiktok?: string;
+
+  @IsNotEmpty({ message: 'O CEP é obrigatório' })
+  cep: string;
+  @IsNotEmpty({ message: 'O logradouro é obrigatório' })
+  logradouro: string;
+  @IsNotEmpty({ message: 'O número é obrigatório' })
+  numero: string;
+  @IsNotEmpty({ message: 'O bairro é obrigatório' })
+  bairro: string;
+  @IsNotEmpty({ message: 'A cidade é obrigatória' })
+  cidade: string;
+  @IsNotEmpty({ message: 'O estado é obrigatório' })
+  estado: string;
+
+  // --- Etapa 2 ---
+  @IsOptional() @IsString() avatar?: string;
+
+  @IsNotEmpty({ message: 'A causa principal é obrigatória' })
+  @IsString()
+  causaPrincipal: string;
+
+  @IsArray() servicosOferecidos: string[];
+  @IsArray() publicoAtendido: string[];
+
+  @IsNotEmpty({ message: 'A descrição da ONG é obrigatória' })
+  @MinLength(200, { message: 'A descrição deve ter no mínimo 200 caracteres' })
+  descricao: string;
+
+  // --- Etapa 3 ---
+  @IsArray({ message: 'Selecione ao menos uma habilidade buscada' })
+  habilidadesBuscadas: string[];
+
+  @IsNotEmpty({ message: 'O formato de voluntariado é obrigatório' })
+  @IsString()
+  formatoVoluntariado: string;
+
+  @IsOptional()
+  @IsArray()
+  aceitaDoacoes?: string[];
+
+  @IsEmail({}, { message: 'E-mail institucional inválido' })
   email: string;
 
-  @ApiProperty({ example: '123456', minLength: 6 })
-  @IsString()
-  @MinLength(6, { message: 'A senha deve ter pelo menos 6 caracteres' })
-  @MaxLength(50, { message: 'A senha é muito longa' }) // 👈 Limite de segurança
+  @IsNotEmpty({ message: 'A senha é obrigatória' })
+  @MinLength(8, { message: 'A senha deve ter no mínimo 8 caracteres' })
   password: string;
+
+  // Validação dos Termos e LGPD (Obrigatório vir como true)
+  @Equals(true, { message: 'Você deve aceitar os Termos e Condições de Uso' })
+  @IsBoolean()
+  aceiteTermos: boolean;
+
+  @Equals(true, { message: 'Você deve concordar com a Política de Privacidade e LGPD' })
+  @IsBoolean()
+  aceiteLgpd: boolean;
 }

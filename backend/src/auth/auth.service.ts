@@ -13,7 +13,7 @@ export class AuthService {
     private jwtService: JwtService
   ) {}
 
-  // ROTA DE LOGIN - Agora recebe o LoginDto
+  // ROTA DE LOGIN
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
 
@@ -39,38 +39,44 @@ export class AuthService {
     
     return {
       access_token: await this.jwtService.signAsync(payload),
+      role: user.role, // Opcional: útil para o front-end saber para qual tela redirecionar
+      name: user.name,
     };
   }
 
-  // ROTA DE CADASTRO - Recebe o CreateUserDto e remove o parâmetro role
- // No AuthService
-async register(createUserDto: CreateUserDto | CreateOngDto, role: 'USER' | 'ONG' = 'USER') {
-  const { email, name, password } = createUserDto;
+  // ROTA DE CADASTRO UNIFICADA
+  async register(dto: CreateUserDto | CreateOngDto, role: 'USER' | 'ONG' = 'USER') {
+    // 1. Verificação de duplicidade de e-mail (comum a ambos)
+    const emailExists = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    if (emailExists) throw new BadRequestException('Este e-mail já está em uso.');
 
-  // 1. Verificação de duplicidade
-  const [userExists, nameExists] = await Promise.all([
-    this.prisma.user.findUnique({ where: { email } }),
-    this.prisma.user.findUnique({ where: { name } }),
-  ]);
-  
-  if (userExists) throw new BadRequestException('Este e-mail já está em uso.');
-  if (nameExists) throw new BadRequestException('Este Apelido já está em uso.');
+    // 2. Verificações específicas por Role (CPF ou CNPJ)
+    if (role === 'USER') {
+      const userDto = dto as CreateUserDto;
+      const cpfExists = await this.prisma.user.findUnique({ where: { cpf: userDto.cpf } });
+      if (cpfExists) throw new BadRequestException('Este CPF já está cadastrado.');
+    } else {
+      const ongDto = dto as CreateOngDto;
+      const cnpjExists = await this.prisma.user.findUnique({ where: { cnpj: ongDto.cnpj } });
+      if (cnpjExists) throw new BadRequestException('Este CNPJ já está cadastrado.');
+    }
 
-  // 2. Criptografia
-  const hashedPassword = await bcrypt.hash(password, 10);
+    // 3. Criptografia
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-  // 3. Criação no Banco
-  const newUser = await this.prisma.user.create({
-    data: {
-      name,
-      email,
-      password: hashedPassword,
-      role, // A role agora é injetada dinamicamente
-    },
-  });
+    // 4. Criação no Banco
+    // Separa a senha do restante do DTO para injetar tudo dinamicamente
+    const { password, ...dadosRestantes } = dto;
+    
+    const newUser = await this.prisma.user.create({
+      data: {
+        ...dadosRestantes, // 👈 Injeta automaticamente o CEP, Habilidades, Bio, etc.
+        password: hashedPassword,
+        role,
+      },
+    });
 
-  const { password: _, ...result } = newUser;
-  return result;
-}
-   
+    const { password: _, ...result } = newUser;
+    return result;
+  }
 }

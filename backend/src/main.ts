@@ -19,7 +19,7 @@ async function bootstrap() {
   // 2. Configuração do Swagger (Para bater com os decorators que você já usou)
   const config = new DocumentBuilder()
     .setTitle('Liars Deck API')
-    .setDescription('API de Webhooks e Gerenciamento de Jogadores')
+    .setDescription('API de Webhooks e Gerenciamento de ONGs e Voluntarios')
     .setVersion('1.0')
     .addBearerAuth() // Habilita a opção de colocar o Token JWT no Swagger
     .build();
