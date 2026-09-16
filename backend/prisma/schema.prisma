@@ -9,74 +9,139 @@ datasource db {
   provider = "postgresql"
 }
 
+// ==========================================
+// ENUMS
+// ==========================================
 enum Role {
-  USER 
+  USER
   ONG
   ADMIN
 }
 
+enum ApplicationStatus {
+  PENDING // Voluntário pediu para participar (Aguardando ONG)
+  CONFIRMED // ONG aceitou
+  REJECTED // ONG recusou ou não tem mais vaga
+  COMPLETED // Evento passou e o voluntário compareceu (Gera as "Horas doadas")
+  CANCELLED // Voluntário desistiu
+}
+
+// ==========================================
+// TABELA: USER (Centraliza Voluntários e ONGs)
+// ==========================================
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  name      String   // 👈 Removido o @unique para permitir voluntários homônimos
-  role      Role     @default(USER)
-  avatar    String?  // Pode ser a foto do voluntário ou o logo da ONG
+  id       String  @id @default(uuid())
+  email    String  @unique
+  password String
+  name     String
+  role     Role    @default(USER)
+  avatar   String?
 
-  // ==========================================
-  // CAMPOS COMPARTILHADOS (Voluntário e ONG)
-  // ==========================================
-  // Endereço
-  cep           String?
-  logradouro    String?
-  numero        String?
-  bairro        String?
-  cidade        String?
-  estado        String?
+  // --- Endereço Compartilhado ---
+  cep        String?
+  logradouro String?
+  numero     String?
+  bairro     String?
+  cidade     String?
+  estado     String?
 
-  // Conformidade Legal
-  aceiteTermos  Boolean   @default(false)
-  aceiteLgpd    Boolean   @default(false)
+  // --- Conformidade Legal ---
+  aceiteTermos Boolean @default(false)
+  aceiteLgpd   Boolean @default(false)
 
-  // ==========================================
-  // CAMPOS EXCLUSIVOS: VOLUNTÁRIO (Role.USER)
-  // ==========================================
+  // --- CAMPOS EXCLUSIVOS: VOLUNTÁRIO (Role.USER) ---
   tipoDocumento   String?
-  cpf             String?   @unique
+  cpf             String?  @unique
   nascimento      String?
-  telefone        String?   // Telefone pessoal do voluntário
+  telefone        String?
   bio             String?
-  habilidades     String[]  // Habilidades que o voluntário possui
-  disponibilidade String[]  // Disponibilidade do voluntário (Manhã, Tarde, etc.)
+  habilidades     String[]
+  disponibilidade String[]
 
-  // ==========================================
-  // CAMPOS EXCLUSIVOS: ONG (Role.ONG)
-  // ==========================================
-  // Identificação
-  razaoSocial       String?
-  cnpj              String?   @unique
-  anoFundacao       Int?
-  site              String?
-  
-  // Contato ONG
-  telefoneFixo      String?
-  whatsapp          String?
-  instagram         String?
-  facebook          String?
-  tiktok            String?
-  
-  // Detalhes e Essência
+  // --- CAMPOS EXCLUSIVOS: ONG (Role.ONG) ---
+  razaoSocial         String?
+  cnpj                String?  @unique
+  anoFundacao         Int?
+  site                String?
+  telefoneFixo        String?
+  whatsapp            String?
+  instagram           String?
+  facebook            String?
+  tiktok              String?
   causaPrincipal      String?
   servicosOferecidos  String[]
   publicoAtendido     String[]
   descricao           String?
-  
-  // Necessidades da ONG
   habilidadesBuscadas String[]
-  formatoVoluntariado String?   // 👈 Modificado para opcional (?)
+  formatoVoluntariado String?
   aceitaDoacoes       String[]
-  
-  // ==========================================
+
+  // --- Relacionamentos ---
+  opportunities Opportunity[] @relation("OngOpportunities") // Vagas criadas pela ONG
+  applications  Application[] @relation("UserApplications") // Vagas nas quais o voluntário se inscreveu
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ==========================================
+// TABELA: OPORTUNIDADES (Eventos/Vagas criadas pelas ONGs)
+// ==========================================
+model Opportunity {
+  id          String  @id @default(uuid())
+  title       String
+  description String
+  banner      String?
+
+  // Datas e Horas 
+  eventDate      DateTime
+  durationHours  Int
+  totalVacancies Int
+
+  // Categorias para filtro
+  categories String[]
+
+  // Localização do evento (pode ser diferente da sede da ONG)
+  cep        String?
+  logradouro String?
+  numero     String?
+  bairro     String?
+  cidade     String?
+  estado     String?
+  latitude   Float?
+  longitude  Float?
+
+  // Relacionamento com a ONG criadora
+  ongId String
+  ong   User   @relation("OngOpportunities", fields: [ongId], references: [id], onDelete: Cascade)
+
+  // Relacionamento com as inscrições
+  applications Application[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==========================================
+// TABELA: INSCRIÇÕES (A ponte Voluntário <-> Vaga)
+// ==========================================
+model Application {
+  id String @id @default(uuid())
+
+  // Voluntário inscrito
+  userId String
+  user   User   @relation("UserApplications", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Vaga desejada
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  // Status da candidatura
+  status ApplicationStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Garante que a mesma pessoa não se inscreva duas vezes na mesma vaga
+  @@unique([userId, opportunityId])
 }
