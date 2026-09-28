@@ -80,6 +80,9 @@ model User {
   opportunities Opportunity[] @relation("OngOpportunities") // Vagas criadas pela ONG
   applications  Application[] @relation("UserApplications") // Vagas nas quais o voluntário se inscreveu
 
+  sentMessages     Message[] @relation("SentMessages") // Mensagens Enviadas
+  receivedMessages Message[] @relation("ReceivedMessages") // Mensagens Recebidas
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -144,4 +147,17 @@ model Application {
 
   // Garante que a mesma pessoa não se inscreva duas vezes na mesma vaga
   @@unique([userId, opportunityId])
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  content    String
+  senderId   String
+  receiverId String
+  createdAt  DateTime @default(now())
+  read       Boolean  @default(false)
+
+  // Relações
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
 }

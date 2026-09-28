@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Chat - ABC do Bem</title>
+    <!-- Importando o Socket.io Client e o Axios para requisições HTTP -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 400px; }
+        input, button { width: 100%; padding: 10px; margin-top: 10px; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; }
+        button { background-color: #4CAF50; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #45a049; }
+        #chat-section { display: none; }
+        #messages { border: 1px solid #ccc; height: 300px; overflow-y: scroll; padding: 10px; margin-top: 10px; background: #fafafa; display: flex; flex-direction: column; gap: 8px;}
+        .msg { padding: 8px 12px; border-radius: 12px; max-width: 80%; word-wrap: break-word; }
+        .minha-msg { background-color: #dcf8c6; align-self: flex-end; }
+        .outra-msg { background-color: #fff; border: 1px solid #ddd; align-self: flex-start; }
+        .info { font-size: 12px; color: gray; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="login-section">
+    <h2>Login (ABC do Bem)</h2>
+    <input type="email" id="email" placeholder="E-mail" value="ana.carolina@email.com">
+    <input type="password" id="password" placeholder="Senha" value="SenhaForte@123">
+    <button onclick="fazerLogin()">Entrar</button>
+</div>
+
+<div class="container" id="chat-section">
+    <h2>Chat 💬</h2>
+    <div class="info" id="meu-id-display">Meu ID: ...</div>
+    
+    <label for="receiverId">ID do Destinatário:</label>
+    <input type="text" id="receiverId" value="b9ec9772-691f-431d-9219-612696738c0e">
+    
+    <button onclick="carregarHistorico()" style="background-color: #2196F3;">Carregar Histórico REST</button>
+
+    <div id="messages"></div>
+    
+    <input type="text" id="msg-input" placeholder="Escreva a sua mensagem...">
+    <button onclick="enviarMensagem()">Enviar</button>
+</div>
+
+<script>
+    const API_URL = 'http://localhost:3000';
+    let socket;
+    let meuToken = '';
+    let meuUserId = '';
+
+    // Função auxiliar para decodificar o JWT e pegar o ID do usuário que acabou de logar
+    function parseJwt(token) {
+        try {
+            return JSON.parse(atob(token.split('.')[1]));
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async function fazerLogin() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+
+        try {
+            // Faz o POST na sua rota de Auth
+            const response = await axios.post(`${API_URL}/auth/login`, { email, password });
+            meuToken = response.data.access_token || response.data.token; // Ajuste se o nome do token for diferente
+            
+            // Decodifica o token para achar o ID (sub, id ou userId)
+            const payload = parseJwt(meuToken);
+            meuUserId = payload.sub || payload.id || payload.userId;
+
+            // Esconde login e mostra chat
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('chat-section').style.display = 'block';
+            document.getElementById('meu-id-display').innerText = `Meu ID: ${meuUserId}`;
+
+            // Conectar ao WebSocket!
+            conectarSocket();
+        } catch (error) {
+            alert('Erro no login. Verifique as credenciais no console.');
+            console.error(error);
+        }
+    }
+
+    function conectarSocket() {
+        // Conecta ao Gateway do NestJS passando o ID na query string
+        socket = io(API_URL, {
+            transports: ['websocket'],
+            query: { userId: meuUserId }
+        });
+
+        socket.on('connect', () => {
+            console.log('✅ Conectado ao WebSocket com Socket ID:', socket.id);
+        });
+
+        // Fica a ouvir as mensagens novas que chegam
+        socket.on('newMessage', (mensagem) => {
+            adicionarMensagemNaTela(mensagem, false);
+        });
+    }
+
+    function enviarMensagem() {
+        const input = document.getElementById('msg-input');
+        const receiverId = document.getElementById('receiverId').value;
+        const content = input.value;
+
+        if (!content.trim() || !receiverId.trim()) return;
+
+        const payload = { receiverId, content };
+
+        // Emite a mensagem para o backend
+        socket.emit('sendMessage', payload, (respostaDoServidor) => {
+            // Callback opcional: o servidor pode devolver a mensagem salva
+            console.log('Mensagem salva no banco:', respostaDoServidor);
+        });
+
+        // Adiciona na própria tela instantaneamente
+        adicionarMensagemNaTela({ content, senderId: meuUserId }, true);
+        input.value = '';
+    }
+
+    async function carregarHistorico() {
+        const receiverId = document.getElementById('receiverId').value;
+        if(!receiverId) return alert("Preencha o ID do destinatário");
+
+        try {
+            const response = await axios.get(`${API_URL}/chat/history/${receiverId}`, {
+                headers: { Authorization: `Bearer ${meuToken}` }
+            });
+            
+            document.getElementById('messages').innerHTML = ''; // Limpa a tela
+            response.data.forEach(msg => {
+                const souEu = msg.senderId === meuUserId;
+                adicionarMensagemNaTela(msg, souEu);
+            });
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao carregar histórico");
+        }
+    }
+
+    function adicionarMensagemNaTela(msg, souEu) {
+        const div = document.createElement('div');
+        div.className = 'msg ' + (souEu ? 'minha-msg' : 'outra-msg');
+        div.innerText = msg.content;
+        document.getElementById('messages').appendChild(div);
+        
+        // Rolar automaticamente para o fundo
+        const msgsContainer = document.getElementById('messages');
+        msgsContainer.scrollTop = msgsContainer.scrollHeight;
+    }
+</script>
+
+</body>
+</html>

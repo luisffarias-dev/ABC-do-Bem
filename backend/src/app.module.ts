@@ -6,6 +6,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { OpportunitiesModule } from './opportunities/opportunities.module'
 import { UsersModule } from './users/users.module'
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { UsersModule } from './users/users.module'
     PrismaModule,
     OpportunitiesModule,
     UsersModule,
+    ChatModule,
 
   ],
   controllers: [], // Removido o AppController padrão

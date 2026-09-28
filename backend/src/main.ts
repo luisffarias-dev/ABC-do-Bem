@@ -7,6 +7,7 @@ async function bootstrap() {
   // Cria a instância da aplicação baseada no AppModule
   const app = await NestFactory.create(AppModule);
 
+  app.enableCors();
   // 1. Configuração do ValidationPipe (Crucial para os seus DTOs funcionarem)
   app.useGlobalPipes(
     new ValidationPipe({
