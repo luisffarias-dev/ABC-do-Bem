@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOpportunityDto } from './dto/create-opportunity.dto';
 import { UpdateOpportunityDto } from './dto/update-opportunity.dto';
+import { ApplicationStatus } from '@prisma/client';
 
 @Injectable()
 export class OpportunitiesService {
@@ -161,5 +162,58 @@ export class OpportunitiesService {
       }
       throw error;
     }
+  }
+
+
+// 9. LISTAR CANDIDATOS DE UMA VAGA (Apenas para a ONG dona da vaga)
+  async getApplications(opportunityId: string, ongId: string, userRole: string) {
+    if (userRole !== 'ONG') {
+      throw new UnauthorizedException('Apenas ONGs podem ver os inscritos.');
+    }
+
+    // Verifica se a vaga pertence mesmo a esta ONG
+    const opportunity = await this.prisma.opportunity.findUnique({ where: { id: opportunityId } });
+    if (!opportunity) throw new NotFoundException('Vaga não encontrada');
+    if (opportunity.ongId !== ongId) {
+      throw new UnauthorizedException('Você só pode ver os candidatos das suas próprias vagas.');
+    }
+
+    // Retorna as inscrições junto com os dados úteis do voluntário
+    return this.prisma.application.findMany({
+      where: { opportunityId },
+      include: {
+        user: {
+          select: { 
+            id: true, name: true, avatar: true, email: true, telefone: true, habilidades: true 
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  // 10. MUDAR O STATUS DA INSCRIÇÃO (Aceitar ou Recusar)
+  async updateApplicationStatus(applicationId: string, ongId: string, userRole: string, status: ApplicationStatus) {
+    if (userRole !== 'ONG') {
+      throw new UnauthorizedException('Acesso negado. Apenas ONGs gerenciam inscrições.');
+    }
+
+    // Busca a inscrição e a vaga vinculada a ela
+    const application = await this.prisma.application.findUnique({
+      where: { id: applicationId },
+      include: { opportunity: true }
+    });
+
+    if (!application) throw new NotFoundException('Inscrição não encontrada.');
+    
+    // Garante que a ONG não está tentando aceitar um candidato da vaga de outra ONG
+    if (application.opportunity.ongId !== ongId) {
+      throw new UnauthorizedException('Você não tem permissão para gerenciar esta inscrição.');
+    }
+
+    return this.prisma.application.update({
+      where: { id: applicationId },
+      data: { status }
+    });
   }
 }

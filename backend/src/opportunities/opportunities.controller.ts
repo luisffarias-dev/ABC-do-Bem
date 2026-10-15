@@ -7,6 +7,7 @@ import { OpportunitiesService } from './opportunities.service';
 import { CreateOpportunityDto } from './dto/create-opportunity.dto';
 import { UpdateOpportunityDto } from './dto/update-opportunity.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'; // VERIFIQUE ESTE CAMINHO
+import { ApplicationStatus } from '@prisma/client';
 
 @ApiTags('Opportunities (Vagas)')
 @Controller('opportunities')
@@ -98,5 +99,29 @@ export class OpportunitiesController {
   @ApiOperation({ summary: 'Exibe os detalhes de uma única vaga' })
   findOne(@Param('id') id: string) {
     return this.opportunitiesService.findOne(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get(':id/applications')
+  @ApiOperation({ summary: 'Lista os voluntários inscritos em uma vaga (Acesso restrito à ONG dona)' })
+  getApplications(@Param('id') id: string, @Request() req: any) {
+    const ongId = req.user.userId;
+    const role = req.user.role;
+    return this.opportunitiesService.getApplications(id, ongId, role);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch('applications/:applicationId/status')
+  @ApiOperation({ summary: 'Aceita ou rejeita um candidato (Apenas ONG)' })
+  updateApplicationStatus(
+    @Param('applicationId') applicationId: string,
+    @Body('status') status: ApplicationStatus, // Espera receber { "status": "CONFIRMED" } ou "REJECTED"
+    @Request() req: any
+  ) {
+    const ongId = req.user.userId;
+    const role = req.user.role;
+    return this.opportunitiesService.updateApplicationStatus(applicationId, ongId, role, status);
   }
 }
