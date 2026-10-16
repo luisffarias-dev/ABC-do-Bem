@@ -17,4 +17,13 @@ export class ChatController {
     const myUserId = req.user.userId; // Extraído do token com segurança
     return this.chatService.getChatHistory(myUserId, otherUserId);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('conversations')
+  @ApiOperation({ summary: 'Carrega a lista da Caixa de Entrada (Inbox) com a última mensagem de cada contato' })
+  getConversations(@Request() req: any) {
+    const myUserId = req.user.userId;
+    return this.chatService.getConversations(myUserId);
+  }
 }
