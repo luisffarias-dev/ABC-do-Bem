@@ -22,8 +22,10 @@ enum ApplicationStatus {
   PENDING // Voluntário pediu para participar (Aguardando ONG)
   CONFIRMED // ONG aceitou
   REJECTED // ONG recusou ou não tem mais vaga
-  COMPLETED // Evento passou e o voluntário compareceu (Gera as "Horas doadas")
+  COMPLETED // Evento passou e o voluntário compareceu
   CANCELLED // Voluntário desistiu
+  PRESENT // NOVO: Confirmou presença no dia
+  ABSENT // NOVO: Faltou no dia
 }
 
 // ==========================================
@@ -76,19 +78,25 @@ model User {
   formatoVoluntariado String?
   aceitaDoacoes       String[]
 
-  // --- Relacionamentos ---
-  opportunities Opportunity[] @relation("OngOpportunities") // Vagas criadas pela ONG
-  applications  Application[] @relation("UserApplications") // Vagas nas quais o voluntário se inscreveu
+  // --- Relacionamentos Originais ---
+  opportunities    Opportunity[] @relation("OngOpportunities")
+  applications     Application[] @relation("UserApplications")
+  sentMessages     Message[]     @relation("SentMessages")
+  receivedMessages Message[]     @relation("ReceivedMessages")
 
-  sentMessages     Message[] @relation("SentMessages") // Mensagens Enviadas
-  receivedMessages Message[] @relation("ReceivedMessages") // Mensagens Recebidas
+  // --- NOVOS Relacionamentos (Feed, Notificações e Seguidores) ---
+  notifications        Notification[]
+  volunteerExperiences VolunteerExperience[]
+  ongPosts             OngPost[]
+  followers            OngFollower[]         @relation("OngToFollower")
+  following            OngFollower[]         @relation("VolunteerToOng")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 // ==========================================
-// TABELA: OPORTUNIDADES (Eventos/Vagas criadas pelas ONGs)
+// TABELA: OPORTUNIDADES (Eventos/Vagas)
 // ==========================================
 model Opportunity {
   id          String  @id @default(uuid())
@@ -96,15 +104,11 @@ model Opportunity {
   description String
   banner      String?
 
-  // Datas e Horas 
   eventDate      DateTime
   durationHours  Int
   totalVacancies Int
+  categories     String[]
 
-  // Categorias para filtro
-  categories String[]
-
-  // Localização do evento (pode ser diferente da sede da ONG)
   cep        String?
   logradouro String?
   numero     String?
@@ -114,11 +118,9 @@ model Opportunity {
   latitude   Float?
   longitude  Float?
 
-  // Relacionamento com a ONG criadora
   ongId String
   ong   User   @relation("OngOpportunities", fields: [ongId], references: [id], onDelete: Cascade)
 
-  // Relacionamento com as inscrições
   applications Application[]
 
   createdAt DateTime @default(now())
@@ -131,33 +133,98 @@ model Opportunity {
 model Application {
   id String @id @default(uuid())
 
-  // Voluntário inscrito
   userId String
   user   User   @relation("UserApplications", fields: [userId], references: [id], onDelete: Cascade)
 
-  // Vaga desejada
   opportunityId String
   opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
 
-  // Status da candidatura
   status ApplicationStatus @default(PENDING)
+
+  // --- NOVOS CAMPOS: Suporte e Validação de Horas ---
+  caronaOuSuporte  String?
+  autorizouContato Boolean @default(true)
+  horasValidadas   Int     @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Garante que a mesma pessoa não se inscreva duas vezes na mesma vaga
   @@unique([userId, opportunityId])
 }
 
+// ==========================================
+// TABELA: MENSAGENS (Chat)
+// ==========================================
 model Message {
-  id         String   @id @default(uuid())
+  id         String  @id @default(uuid())
   content    String
   senderId   String
   receiverId String
-  createdAt  DateTime @default(now())
-  read       Boolean  @default(false)
+  read       Boolean @default(false)
 
-  // Relações
-  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
-  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  sender   User @relation("SentMessages", fields: [senderId], references: [id])
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+// ==========================================
+// NOVAS TABELAS (NOTIFICAÇÕES E FEED SOCIAL)
+// ==========================================
+
+// 1. Notificações do Sistema
+model Notification {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title   String
+  message String
+  read    Boolean @default(false)
+
+  type   String? // Ex: "NEW_MESSAGE", "APPLICATION_APPROVED"
+  linkId String? // ID do evento ou da conversa para o app navegar ao clicar
+
+  createdAt DateTime @default(now())
+}
+
+// 2. Feed: Relatos do Voluntário
+model VolunteerExperience {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  ongName       String
+  text          String
+  imageUrl      String?
+  formattedDate String // Ex: "Novembro/2026"
+
+  createdAt DateTime @default(now())
+}
+
+// 3. Feed: Postagens/Mural da ONG
+model OngPost {
+  id    String @id @default(uuid())
+  ongId String
+  ong   User   @relation(fields: [ongId], references: [id], onDelete: Cascade)
+
+  title    String
+  text     String
+  imageUrl String?
+
+  createdAt DateTime @default(now())
+}
+
+// 4. Sistema de Seguidores (Voluntário segue ONG)
+model OngFollower {
+  id    String @id @default(uuid())
+  ongId String
+  ong   User   @relation("OngToFollower", fields: [ongId], references: [id], onDelete: Cascade)
+
+  volunteerId String
+  volunteer   User   @relation("VolunteerToOng", fields: [volunteerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([ongId, volunteerId]) // Um voluntário só segue a mesma ONG uma vez
 }

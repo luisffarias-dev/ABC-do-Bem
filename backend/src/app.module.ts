@@ -7,6 +7,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { OpportunitiesModule } from './opportunities/opportunities.module'
 import { UsersModule } from './users/users.module'
 import { ChatModule } from './chat/chat.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ChatModule } from './chat/chat.module';
     OpportunitiesModule,
     UsersModule,
     ChatModule,
+    NotificationsModule,
 
   ],
   controllers: [], // Removido o AppController padrão
