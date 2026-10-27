@@ -8,6 +8,7 @@ import { OpportunitiesModule } from './opportunities/opportunities.module'
 import { UsersModule } from './users/users.module'
 import { ChatModule } from './chat/chat.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { SocialModule } from './social/social.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     UsersModule,
     ChatModule,
     NotificationsModule,
+    SocialModule,
 
   ],
   controllers: [], // Removido o AppController padrão
