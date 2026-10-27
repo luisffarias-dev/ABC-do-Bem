@@ -216,4 +216,31 @@ export class OpportunitiesService {
       data: { status }
     });
   }
+
+  // Adicione no opportunities.service.ts
+async validatePresence(applicationId: string, ongId: string, status: ApplicationStatus, horasValidadas: number = 0) {
+  // 1. Verifica se a inscrição existe e traz os dados da oportunidade
+  const application = await this.prisma.application.findUnique({
+    where: { id: applicationId },
+    include: { opportunity: true },
+  });
+
+  if (!application) {
+    throw new NotFoundException('Inscrição não encontrada.');
+  }
+
+  // 2. Garante que a ONG logada é a dona do evento
+  if (application.opportunity.ongId !== ongId) {
+    throw new UnauthorizedException('Apenas a ONG organizadora deste evento pode validar a presença.');
+  }
+
+  // 3. Atualiza o status e as horas validadas
+  return this.prisma.application.update({
+    where: { id: applicationId },
+    data: {
+      status: status, // PRESENT ou ABSENT
+      horasValidadas: status === 'PRESENT' ? horasValidadas : 0,
+    },
+  });
+}
 }

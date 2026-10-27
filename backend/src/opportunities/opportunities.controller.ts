@@ -124,4 +124,22 @@ export class OpportunitiesController {
     const role = req.user.role;
     return this.opportunitiesService.updateApplicationStatus(applicationId, ongId, role, status);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch('applications/:applicationId/presenca')
+  @ApiOperation({ summary: 'Valida a presença do voluntário no dia do evento (Gera horas)' })
+  async validatePresence(
+    @Param('applicationId') applicationId: string,
+    @Body() body: { status: ApplicationStatus; horasValidadas: number },
+    @Request() req: any,
+  ) {
+    const ongId = req.user.userId;
+    return this.opportunitiesService.validatePresence(
+      applicationId,
+      ongId,
+      body.status,
+      body.horasValidadas,
+    );
+  }
 }
