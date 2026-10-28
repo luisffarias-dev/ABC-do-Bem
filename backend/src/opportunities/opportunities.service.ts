@@ -9,6 +9,13 @@ import { CreateOpportunityDto } from './dto/create-opportunity.dto';
 import { UpdateOpportunityDto } from './dto/update-opportunity.dto';
 import { ApplicationStatus } from '@prisma/client';
 
+
+
+interface RecommendationResult {
+  opportunityId: string;
+  score: number;
+}
+
 @Injectable()
 export class OpportunitiesService {
   constructor(private prisma: PrismaService) {}
@@ -242,5 +249,83 @@ async validatePresence(applicationId: string, ongId: string, status: Application
       horasValidadas: status === 'PRESENT' ? horasValidadas : 0,
     },
   });
+}
+
+
+
+async getRecommendedOpportunities(userId: string) {
+  // 1. Busca o perfil completo do voluntário
+  const user = await this.prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      habilidades: true,
+      cidade: true,
+      estado: true,
+    },
+  });
+
+  if (!user) throw new NotFoundException('Usuário não encontrado');
+
+  // 2. Busca todas as vagas ativas/abertas
+  const opportunities = await this.prisma.opportunity.findMany({
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      categories: true,
+      cidade: true,
+      estado: true,
+      latitude: true,
+      longitude: true,
+    },
+  });
+
+  if (opportunities.length === 0) return [];
+
+  // 3. Comunicação com a API Flask
+  try {
+    const flaskUrl = process.env.FLASK_ML_URL || 'http://localhost:5000/recommend';
+    
+    const flaskResponse = await fetch(flaskUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user: {
+          habilidades: user.habilidades,
+          cidade: user.cidade,
+          estado: user.estado,
+        },
+        opportunities: opportunities,
+      }),
+    });
+
+    const recommendations = (await flaskResponse.json()) as RecommendationResult[];
+
+    // 4. Mapeamento com tipagem explícita (Resolve o erro TS2362)
+    const scoreMap = new Map<string, number>(
+      recommendations.map((r) => [r.opportunityId, r.score])
+    );
+
+    const result = opportunities
+      .filter((opp) => scoreMap.has(opp.id))
+      .map((opp) => {
+        const score = scoreMap.get(opp.id) ?? 0;
+        return {
+          ...opp,
+          matchScore: Math.round(score * 100), // Converte para % sem erro
+        };
+      })
+      .sort((a, b) => b.matchScore - a.matchScore);
+
+    return result;
+  } catch (error) {
+    console.error('Erro na integração com o Flask ML (usando fallback):', error);
+    // Fallback: Se o Flask ainda não estiver rodando, retorna as vagas ordenadas por data
+    return opportunities.map((opp) => ({
+      ...opp,
+      matchScore: 0,
+    }));
+  }
 }
 }

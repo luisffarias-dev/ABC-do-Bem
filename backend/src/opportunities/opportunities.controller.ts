@@ -142,4 +142,13 @@ export class OpportunitiesController {
       body.horasValidadas,
     );
   }
+
+  @UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
+@Get('recommended')
+@ApiOperation({ summary: 'Retorna vagas recomendadas para o voluntário logado com base em IA/ML' })
+async getRecommended(@Request() req: any) {
+  const userId = req.user.userId;
+  return this.opportunitiesService.getRecommendedOpportunities(userId);
+}
 }
