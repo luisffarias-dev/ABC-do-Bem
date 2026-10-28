@@ -3,7 +3,7 @@ name: Deploy Flutter Web to GitHub Pages
 on:
   push:
     branches:
-      - main  # Altere se a sua branch principal tiver outro nome
+      - main
     paths:
       - 'frontend/' # IMPORTANTE: Executa a action apenas se houver mudanças no front
 
