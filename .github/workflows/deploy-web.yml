@@ -1,44 +1,44 @@
 name: Deploy Flutter Web to GitHub Pages
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'frontend/**' # IMPORTANTE: Executa a action apenas se houver mudanças no front
+push:
+branches:
+- main
+paths:
+- 'frontend/'
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+build-and-deploy:
+runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+steps:
+  - name: Checkout repository
+    uses: actions/checkout@v4
 
-      - name: Setup Java (necessário para algumas dependências Android/Gradle se houver, opcional mas seguro)
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
+  - name: Setup Java
+    uses: actions/setup-java@v4
+    with:
+      distribution: 'zulu'
+      java-version: '17'
 
-      - name: Setup Flutter SDK
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.x' # Ou a versão exata que você está usando
-          channel: 'stable'
-          cache: true
+  - name: Setup Flutter SDK
+    uses: subosito/flutter-action@v2
+    with:
+      flutter-version: '3.7.12'
+      channel: 'stable'
+      cache: true
 
-      - name: Get dependencies
-        run: flutter pub get
-        working-directory: ./frontend
+  - name: Get dependencies
+    run: flutter pub get
+    working-directory: ./frontend
 
-      - name: Build Flutter Web
-        run: flutter build web --release --base-href "/ABCdoBem/"
-        working-directory: ./frontend
+  - name: Build Flutter Web
+    run: flutter build web --release --base-href "/ABC-do-Bem/"
+    working-directory: ./frontend
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./frontend/build/web
-          publish_branch: gh-pages
+  - name: Deploy to GitHub Pages
+    uses: peaceiris/actions-gh-pages@v3
+    with:
+      github_token: ${{ secrets.GITHUB_TOKEN }}
+      publish_dir: ./frontend/build/web
+      publish_branch: gh-pages

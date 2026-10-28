@@ -44,7 +44,6 @@ ios/Runner.xcodeproj/xcuserdata/
 ios/Runner.xcworkspace/
 
 # Web
-lib/generated_plugin_registrant.dart
 
 # Symbol files
 *.pdb
