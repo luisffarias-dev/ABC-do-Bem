@@ -4,7 +4,7 @@ import {
 import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard'; // VERIFIQUE ESTE CAMINHO
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('Users (Perfis e Dashboard)')
 @Controller('users')
@@ -12,7 +12,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   // ==========================================
-  // ROTAS PÚBLICAS
+  // ROTAS PÚBLICAS ESTÁTICAS (Ficam no topo)
   // ==========================================
 
   @Get('ongs')
@@ -23,46 +23,48 @@ export class UsersController {
     return this.usersService.findAllOngs(cidade, causa);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Exibe o perfil completo (Público)' })
-  findOne(@Param('id') id: string) {
-    return this.usersService.findOne(id);
+  @Get('voluntarios')
+  @ApiOperation({ summary: 'Lista todos os voluntários (para busca/vitrine), com filtros opcionais' })
+  @ApiQuery({ name: 'busca', required: false, description: 'Filtra por nome ou bio' })
+  @ApiQuery({ name: 'cidade', required: false, description: 'Filtra por cidade' })
+  @ApiQuery({ name: 'habilidade', required: false, description: 'Filtra por habilidade específica' })
+  async getVoluntarios(
+    @Query('busca') busca?: string,
+    @Query('cidade') cidade?: string,
+    @Query('habilidade') habilidade?: string,
+  ) {
+    return this.usersService.getVoluntarios(busca, cidade, habilidade);
   }
 
   // ==========================================
-  // ROTAS PROTEGIDAS (Exigem Token JWT)
+  // ROTAS PROTEGIDAS ESTÁTICAS
   // ==========================================
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @Get('dashboard/me') // Alterado: Não precisa mais de {id} no URL
+  @Get('dashboard/me')
   @ApiOperation({ summary: 'Retorna as estatísticas e o próximo evento do voluntário logado' })
   getDashboardData(@Request() req: any) {
-    const userId = req.user.userId; // O sistema sabe quem é pelo Token!
+    const userId = req.user.userId;
     return this.usersService.getDashboardData(userId);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @Patch('profile/me') // Alterado: Não precisa mais de {id} no URL
+  @Patch('profile/me')
   @ApiOperation({ summary: 'Atualiza dados do próprio perfil (Avatar, Bio, etc)' })
   update(@Request() req: any, @Body() updateUserDto: UpdateUserDto) {
-    const userId = req.user.userId; // Garante que o utilizador só atualiza a si próprio
+    const userId = req.user.userId;
     return this.usersService.update(userId, updateUserDto);
   }
 
-  // Adicione no users.controller.ts (antes da rota GET :id)
+  // ==========================================
+  // ROTAS DINÂMICAS (DEVEM FICAR POR ÚLTIMO)
+  // ==========================================
 
-@Get('voluntarios')
-@ApiOperation({ summary: 'Lista todos os voluntários (para busca/vitrine), com filtros opcionais' })
-@ApiQuery({ name: 'busca', required: false, description: 'Filtra por nome ou bio' })
-@ApiQuery({ name: 'cidade', required: false, description: 'Filtra por cidade' })
-@ApiQuery({ name: 'habilidade', required: false, description: 'Filtra por habilidade específica' })
-async getVoluntarios(
-  @Query('busca') busca?: string,
-  @Query('cidade') cidade?: string,
-  @Query('habilidade') habilidade?: string,
-) {
-  return this.usersService.getVoluntarios(busca, cidade, habilidade);
-}
+  @Get(':id')
+  @ApiOperation({ summary: 'Exibe o perfil completo (Público)' })
+  findOne(@Param('id') id: string) {
+    return this.usersService.findOne(id);
+  }
 }
