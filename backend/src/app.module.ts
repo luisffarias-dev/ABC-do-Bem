@@ -9,6 +9,7 @@ import { UsersModule } from './users/users.module'
 import { ChatModule } from './chat/chat.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SocialModule } from './social/social.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { SocialModule } from './social/social.module';
     ChatModule,
     NotificationsModule,
     SocialModule,
+    AdminModule,
 
   ],
   controllers: [], // Removido o AppController padrão
