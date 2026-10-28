@@ -30,17 +30,15 @@ jobs:
 
       - name: Get dependencies
         run: flutter pub get
-        working-directory: ./nome-da-pasta-do-front  # Substitua pelo nome exato da sua pasta front
+        working-directory: ./frontend
 
       - name: Build Flutter Web
-        run: flutter build web --release --base-href "/nome-do-repositorio/"
-        working-directory: ./nome-da-pasta-do-front  # Substitua pelo nome exato da sua pasta front
-        # NOTA: Troque "/nome-do-repositorio/" pelo nome exato do seu repositório no GitHub 
-        # (ex: /LiarsDeckApk/). Se for um site de usuário (usuario.github.io), remova a flag --base-href.
+        run: flutter build web --release --base-href "/ABCdoBem/"
+        working-directory: ./frontend
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./nome-da-pasta-do-front/build/web # Caminho onde o build web é gerado
-          publish_branch: gh-pages # Branch onde os arquivos estáticos serão publicados
+          publish_dir: ./frontend/build/web
+          publish_branch: gh-pages
