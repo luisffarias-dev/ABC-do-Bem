@@ -73,4 +73,47 @@ export class UsersService {
     const { password, ...result } = updatedUser;
     return result;
   }
+
+  async getVoluntarios(busca?: string, cidade?: string, habilidade?: string) {
+  // Monta o filtro dinâmico
+  const where: any = {
+    role: 'USER', // Garante que traz apenas VOLUNTÁRIOS
+  };
+
+  if (cidade) {
+    where.cidade = { contains: cidade, mode: 'insensitive' };
+  }
+
+  if (habilidade) {
+    where.habilidades = { has: habilidade };
+  }
+
+  if (busca) {
+    where.OR = [
+      { name: { contains: busca, mode: 'insensitive' } },
+      { bio: { contains: busca, mode: 'insensitive' } },
+    ];
+  }
+
+  // Busca no banco excluindo a senha
+  const voluntarios = await this.prisma.user.findMany({
+    where,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      avatar: true,
+      bio: true,
+      cidade: true,
+      estado: true,
+      habilidades: true,
+      disponibilidade: true,
+      telefone: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return voluntarios;
+}
 }

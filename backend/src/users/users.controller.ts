@@ -50,4 +50,19 @@ export class UsersController {
     const userId = req.user.userId; // Garante que o utilizador só atualiza a si próprio
     return this.usersService.update(userId, updateUserDto);
   }
+
+  // Adicione no users.controller.ts (antes da rota GET :id)
+
+@Get('voluntarios')
+@ApiOperation({ summary: 'Lista todos os voluntários (para busca/vitrine), com filtros opcionais' })
+@ApiQuery({ name: 'busca', required: false, description: 'Filtra por nome ou bio' })
+@ApiQuery({ name: 'cidade', required: false, description: 'Filtra por cidade' })
+@ApiQuery({ name: 'habilidade', required: false, description: 'Filtra por habilidade específica' })
+async getVoluntarios(
+  @Query('busca') busca?: string,
+  @Query('cidade') cidade?: string,
+  @Query('habilidade') habilidade?: string,
+) {
+  return this.usersService.getVoluntarios(busca, cidade, habilidade);
+}
 }
