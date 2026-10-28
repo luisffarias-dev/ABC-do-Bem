@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'frontend/' # IMPORTANTE: Executa a action apenas se houver mudanças no front
+      - 'frontend/**' # IMPORTANTE: Executa a action apenas se houver mudanças no front
 
 jobs:
   build-and-deploy:
