@@ -170,6 +170,7 @@ export class OpportunitiesService {
 
     const opportunity = await this.prisma.opportunity.findUnique({
       where: { id: opportunityId },
+      include: { ong: true },
     });
 
     if (!opportunity) {
@@ -177,10 +178,34 @@ export class OpportunitiesService {
     }
 
     try {
+      // 1. Cria a candidatura
       const application = await this.prisma.application.create({
         data: {
           userId: userId,
           opportunityId: opportunityId,
+        },
+        include: { user: true },
+      });
+
+      // 2. Cria notificação para o Voluntário
+      await this.prisma.notification.create({
+        data: {
+          userId: userId,
+          title: 'Candidatura Realizada!',
+          message: `Sua candidatura para "${opportunity.title}" foi enviada com sucesso e aguarda aprovação da ONG.`,
+          type: 'APPLICATION_PENDING',
+          linkId: opportunityId,
+        },
+      });
+
+      // 3. Cria notificação para a ONG dona da vaga
+      await this.prisma.notification.create({
+        data: {
+          userId: opportunity.ongId,
+          title: 'Novo Voluntário Inscrito!',
+          message: `${application.user.name} candidatou-se à vaga "${opportunity.title}".`,
+          type: 'NEW_CANDIDATE',
+          linkId: opportunityId,
         },
       });
 
