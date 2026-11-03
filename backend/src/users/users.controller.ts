@@ -67,4 +67,16 @@ export class UsersController {
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('dashboard/me')
+  @ApiOperation({ summary: 'Retorna estatísticas, próximo evento e o histórico de candidaturas do voluntário' })
+  getDashboard(@Request() req: any) {
+    // Extrai o ID do voluntário logado de dentro do token JWT
+    const userId = req.user.userId; 
+    
+    // Chama o serviço que atualizámos
+    return this.usersService.getDashboardData(userId);
+  }
 }

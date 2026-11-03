@@ -6,7 +6,7 @@ import { ApiTags, ApiOperation, ApiQuery, ApiParam, ApiBearerAuth } from '@nestj
 import { OpportunitiesService } from './opportunities.service';
 import { CreateOpportunityDto } from './dto/create-opportunity.dto';
 import { UpdateOpportunityDto } from './dto/update-opportunity.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard'; // VERIFIQUE ESTE CAMINHO
+import { JwtAuthGuard } from '../auth/jwt-auth.guard'; 
 import { ApplicationStatus } from '@prisma/client';
 
 @ApiTags('Opportunities (Vagas)')
@@ -24,7 +24,7 @@ export class OpportunitiesController {
   @ApiOperation({ summary: 'Cria uma nova vaga de voluntariado (Apenas ONG)' })
   create(@Request() req: any, @Body() createOpportunityDto: CreateOpportunityDto) {
     const ongId = req.user.userId;
-    const role = req.user.role; // Extraindo a Role do JWT
+    const role = req.user.role; 
     return this.opportunitiesService.create(ongId, createOpportunityDto, role);
   }
 
@@ -35,7 +35,7 @@ export class OpportunitiesController {
   @ApiParam({ name: 'id', description: 'ID da Vaga' })
   apply(@Param('id') id: string, @Request() req: any) {
     const userId = req.user.userId; 
-    const role = req.user.role; // Extraindo a Role do JWT
+    const role = req.user.role; 
     return this.opportunitiesService.applyToOpportunity(id, userId, role);
   }
 
@@ -63,16 +63,33 @@ export class OpportunitiesController {
     return this.opportunitiesService.remove(id, ongId, role);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('recommended')
+  @ApiOperation({ summary: 'Retorna vagas recomendadas para o voluntário logado com base em IA/ML' })
+  async getRecommended(@Request() req: any) {
+    const userId = req.user.userId;
+    return this.opportunitiesService.getRecommendedOpportunities(userId);
+  }
+
   // ==========================================
   // ROTAS PÚBLICAS (Qualquer um pode ver o feed)
   // ==========================================
 
+  // Mantendo a funcionalidade de Vitrine com indicação de Candidatura
+  @UseGuards(JwtAuthGuard) // Remover se quiser vitrine pública, manter se a app exige login na home
+  @ApiBearerAuth()
   @Get()
-  @ApiOperation({ summary: 'Lista vagas (feed), aceita filtros de cidade e categoria' })
+  @ApiOperation({ summary: 'Lista vagas (feed), aceita filtros de cidade e categoria. Verifica se o voluntário está inscrito.' })
   @ApiQuery({ name: 'cidade', required: false })
   @ApiQuery({ name: 'categoria', required: false })
-  findAll(@Query('cidade') cidade?: string, @Query('categoria') categoria?: string) {
-    return this.opportunitiesService.findAll(cidade, categoria);
+  findAll(
+    @Query('cidade') cidade?: string, 
+    @Query('categoria') categoria?: string,
+    @Request() req?: any
+  ) {
+    const userId = req?.user?.userId;
+    return this.opportunitiesService.findAll(cidade, categoria, userId);
   }
 
   @Get('nearby')
@@ -117,7 +134,7 @@ export class OpportunitiesController {
   @ApiOperation({ summary: 'Aceita ou rejeita um candidato (Apenas ONG)' })
   updateApplicationStatus(
     @Param('applicationId') applicationId: string,
-    @Body('status') status: ApplicationStatus, // Espera receber { "status": "CONFIRMED" } ou "REJECTED"
+    @Body('status') status: ApplicationStatus, 
     @Request() req: any
   ) {
     const ongId = req.user.userId;
@@ -142,13 +159,4 @@ export class OpportunitiesController {
       body.horasValidadas,
     );
   }
-
-  @UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
-@Get('recommended')
-@ApiOperation({ summary: 'Retorna vagas recomendadas para o voluntário logado com base em IA/ML' })
-async getRecommended(@Request() req: any) {
-  const userId = req.user.userId;
-  return this.opportunitiesService.getRecommendedOpportunities(userId);
-}
 }

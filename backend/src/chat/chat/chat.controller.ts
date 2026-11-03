@@ -1,7 +1,7 @@
-import { Controller, Get, Param, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import { Controller, Get, Post, Patch, Param, Body, Query, UseGuards, Request } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { ChatService } from './chat.service';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard'; // Verifique o caminho
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 
 @ApiTags('Chat (Mensagens)')
 @Controller('chat')
@@ -10,20 +10,53 @@ export class ChatController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @Get('history/:otherUserId')
-  @ApiOperation({ summary: 'Recupera o histórico de mensagens entre o utilizador logado e outro utilizador' })
-  @ApiParam({ name: 'otherUserId', description: 'ID da ONG ou Voluntário com quem se está a conversar' })
-  getHistory(@Param('otherUserId') otherUserId: string, @Request() req: any) {
-    const myUserId = req.user.userId; // Extraído do token com segurança
-    return this.chatService.getChatHistory(myUserId, otherUserId);
+  @Get('conversations')
+  @ApiOperation({ summary: 'Lista de conversas do usuário (Inbox)' })
+  getConversations(@Request() req: any) {
+    const userId = req.user.userId;
+    return this.chatService.getConversations(userId);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @Get('conversations')
-  @ApiOperation({ summary: 'Carrega a lista da Caixa de Entrada (Inbox) com a última mensagem de cada contato' })
-  getConversations(@Request() req: any) {
-    const myUserId = req.user.userId;
-    return this.chatService.getConversations(myUserId);
+  @Get('conversations/:id/messages')
+  @ApiOperation({ summary: 'Histórico de mensagens de uma sala/contato com paginação' })
+  @ApiParam({ name: 'id', description: 'ID do outro usuário (participante)' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  getMessages(
+    @Param('id') otherUserId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Request() req?: any,
+  ) {
+    const userId = req.user.userId;
+    const pageNumber = page ? parseInt(page, 10) : 1;
+    const limitNumber = limit ? parseInt(limit, 10) : 30;
+    return this.chatService.getChatHistory(userId, otherUserId, pageNumber, limitNumber);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('conversations/:id/messages')
+  @ApiOperation({ summary: 'Enviar mensagem para um contato' })
+  @ApiParam({ name: 'id', description: 'ID do usuário destinatário' })
+  async sendMessage(
+    @Param('id') receiverId: string,
+    @Body('content') content: string,
+    @Request() req: any,
+  ) {
+    const senderId = req.user.userId;
+    return this.chatService.saveMessage(senderId, receiverId, content);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch('conversations/:id/read')
+  @ApiOperation({ summary: 'Marcar mensagens da conversa como lidas (zera unreadCount)' })
+  @ApiParam({ name: 'id', description: 'ID do usuário remetente' })
+  markAsRead(@Param('id') otherUserId: string, @Request() req: any) {
+    const userId = req.user.userId;
+    return this.chatService.markAsRead(userId, otherUserId);
   }
 }

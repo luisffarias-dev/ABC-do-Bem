@@ -23,8 +23,9 @@ export class UsersService {
     });
   }
 
-  // 2. DASHBOARD DO VOLUNTÁRIO (Estatísticas e Próximo Evento)
+  // 2. DASHBOARD DO VOLUNTÁRIO (Estatísticas, Próximo Evento e Histórico de Candidaturas)
   async getDashboardData(userId: string) {
+    // 1. Busca todas as candidaturas concluídas para as estatísticas
     const completedApps = await this.prisma.application.findMany({
       where: { userId, status: 'COMPLETED' },
       include: { opportunity: true },
@@ -34,6 +35,7 @@ export class UsersService {
     const ongsAjudadas = new Set(completedApps.map(app => app.opportunity.ongId)).size;
     const cidadesAtendidas = new Set(completedApps.map(app => app.opportunity.cidade)).size;
 
+    // 2. Busca o próximo evento confirmado
     const proximoEvento = await this.prisma.application.findFirst({
       where: { 
         userId, 
@@ -46,9 +48,24 @@ export class UsersService {
       orderBy: { opportunity: { eventDate: 'asc' } }
     });
 
+    // 3. Busca o histórico de TODAS as candidaturas do utilizador com os dados da Vaga e ONG
+    const allApplications = await this.prisma.application.findMany({
+      where: { userId: userId },
+      include: {
+        opportunity: {
+          include: {
+            ong: { select: { id: true, name: true, avatar: true } }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Retorna as estatísticas, próximo evento e o array completo de candidaturas
     return {
       estatisticas: { cidades: cidadesAtendidas, ongsAjudadas, horasDoadas, ranking: 4.8 },
-      proximoEvento: proximoEvento ? proximoEvento.opportunity : null
+      proximoEvento: proximoEvento ? proximoEvento.opportunity : null,
+      applications: allApplications // CAMPO ESSENCIAL ADICIONADO PARA O HISTÓRICO
     };
   }
 
@@ -116,4 +133,5 @@ export class UsersService {
 
   return voluntarios;
 }
+
 }
