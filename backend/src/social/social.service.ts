@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service'; // Ajuste o caminho conforme o seu projeto
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateVolunteerExperienceDto } from './dto/create-volunteer-experience.dto';
+import { CreateOngPostDto } from './dto/create-ong-post.dto';
 
 @Injectable()
 export class SocialService {
@@ -9,22 +11,19 @@ export class SocialService {
   // 1. EXPERIÊNCIAS DOS VOLUNTÁRIOS
   // ==========================================
   
-  async createExperience(userId: string, ongName: string, text: string, formattedDate: string, imageUrl?: string) {
+  async createExperience(userId: string, dto: CreateVolunteerExperienceDto) {
     return this.prisma.volunteerExperience.create({
       data: {
         userId,
-        ongName,
-        text,
-        formattedDate,
-        imageUrl
-      }
+        ...dto,
+      },
     });
   }
 
   async getUserExperiences(userId: string) {
     return this.prisma.volunteerExperience.findMany({
       where: { userId },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -42,21 +41,19 @@ export class SocialService {
   // 2. POSTAGENS / MURAL DAS ONGS
   // ==========================================
 
-  async createOngPost(ongId: string, title: string, text: string, imageUrl?: string) {
+  async createOngPost(ongId: string, dto: CreateOngPostDto) {
     return this.prisma.ongPost.create({
       data: {
         ongId,
-        title,
-        text,
-        imageUrl
-      }
+        ...dto,
+      },
     });
   }
 
   async getOngPosts(ongId: string) {
     return this.prisma.ongPost.findMany({
       where: { ongId },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -65,11 +62,10 @@ export class SocialService {
   // ==========================================
 
   async followOng(volunteerId: string, ongId: string) {
-    // Verifica se já segue
     const existingFollow = await this.prisma.ongFollower.findUnique({
       where: {
-        ongId_volunteerId: { ongId, volunteerId } // Usa a chave composta definida no prisma
-      }
+        ongId_volunteerId: { ongId, volunteerId },
+      },
     });
 
     if (existingFollow) {
@@ -77,7 +73,7 @@ export class SocialService {
     }
 
     await this.prisma.ongFollower.create({
-      data: { ongId, volunteerId }
+      data: { ongId, volunteerId },
     });
 
     return { seguindo: true };
@@ -87,8 +83,8 @@ export class SocialService {
     try {
       await this.prisma.ongFollower.delete({
         where: {
-          ongId_volunteerId: { ongId, volunteerId }
-        }
+          ongId_volunteerId: { ongId, volunteerId },
+        },
       });
       return { seguindo: false };
     } catch (error) {

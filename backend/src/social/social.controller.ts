@@ -1,7 +1,9 @@
 import { Controller, Get, Post, Body, Param, Delete, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { SocialService } from './social.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard'; // Ajuste o caminho
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CreateVolunteerExperienceDto } from './dto/create-volunteer-experience.dto';
+import { CreateOngPostDto } from './dto/create-ong-post.dto';
 
 @ApiTags('Social (Feed, Experiências e Seguidores)')
 @Controller('social')
@@ -16,9 +18,10 @@ export class SocialController {
   @ApiBearerAuth()
   @Post('voluntarios/experiencias')
   @ApiOperation({ summary: 'Cria um novo relato de experiência (Voluntário)' })
-  createExperience(@Request() req: any, @Body() body: { ongName: string; text: string; formattedDate: string; imageUrl?: string }) {
+  @ApiBody({ type: CreateVolunteerExperienceDto })
+  createExperience(@Request() req: any, @Body() dto: CreateVolunteerExperienceDto) {
     const userId = req.user.userId;
-    return this.socialService.createExperience(userId, body.ongName, body.text, body.formattedDate, body.imageUrl);
+    return this.socialService.createExperience(userId, dto);
   }
 
   @Get('voluntarios/:userId/experiencias')
@@ -44,10 +47,10 @@ export class SocialController {
   @ApiBearerAuth()
   @Post('ongs/postagens')
   @ApiOperation({ summary: 'Publica uma nova notícia no mural (Apenas ONG)' })
-  createOngPost(@Request() req: any, @Body() body: { title: string; text: string; imageUrl?: string }) {
+  @ApiBody({ type: CreateOngPostDto })
+  createOngPost(@Request() req: any, @Body() dto: CreateOngPostDto) {
     const ongId = req.user.userId;
-    // Opcional: Pode verificar se a req.user.role === 'ONG'
-    return this.socialService.createOngPost(ongId, body.title, body.text, body.imageUrl);
+    return this.socialService.createOngPost(ongId, dto);
   }
 
   @Get('ongs/:ongId/postagens')
