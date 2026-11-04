@@ -82,12 +82,39 @@ export class UsersService {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('Usuário não encontrado');
     
+    // Separa o e-mail dos restantes dados para aplicar a regra de confirmação
+    const { email, ...updateData } = dto;
+    const dataToUpdate: any = { ...updateData };
+
+    // Regra de Negócio: E-mail Pendente
+    if (email && email !== user.email) {
+      // Gera um código de 6 dígitos (ou token) para validação
+      const token = Math.floor(100000 + Math.random() * 900000).toString(); 
+      
+      dataToUpdate.pendingEmail = email;
+      dataToUpdate.emailConfirmationToken = token;
+      
+      // TODO: Implementar envio real de e-mail (Nodemailer, SendGrid, AWS SES, etc.)
+      console.log(`[SIMULAÇÃO] Enviar código ${token} para confirmar o novo e-mail ${email}`);
+    }
+
+    // O Prisma automaticamente ignora os campos undefined em "dataToUpdate", 
+    // fazendo uma atualização parcial perfeita!
     const updatedUser = await this.prisma.user.update({
       where: { id },
-      data: dto,
+      data: dataToUpdate,
     });
     
     const { password, ...result } = updatedUser;
+    
+    // Se o e-mail foi alterado, avisa o frontend que precisa de confirmação
+    if (dataToUpdate.pendingEmail) {
+      return { 
+        ...result, 
+        message: 'Perfil atualizado parcialmente. Verifique a sua caixa de entrada para confirmar o novo e-mail antes de ele ficar ativo.' 
+      };
+    }
+
     return result;
   }
 
