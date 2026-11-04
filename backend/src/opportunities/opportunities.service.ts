@@ -367,4 +367,39 @@ export class OpportunitiesService {
       }));
     }
   }
+  // CANCELAR CANDIDATURA (Ação do Voluntário)
+  async cancelApplication(opportunityId: string, userId: string, userRole: string) {
+    if (userRole !== 'USER') {
+      throw new UnauthorizedException('Apenas voluntários podem cancelar candidaturas.');
+    }
+
+    // A busca usando o identificador composto (@@unique)
+    const application = await this.prisma.application.findUnique({
+      where: { userId_opportunityId: { userId, opportunityId } },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Candidatura não encontrada.');
+    }
+
+    // Remove o registro do banco de dados (liberta a vaga e tira do dashboard)
+    await this.prisma.application.delete({
+      where: { id: application.id },
+    });
+
+    return { message: 'Candidatura cancelada com sucesso.' };
+  }
+
+  async removeApplication(applicationId: string, ongId: string, userRole: string) {
+    if (userRole !== 'ONG') throw new UnauthorizedException('Apenas ONGs podem remover inscrições.');
+    
+    const application = await this.prisma.application.findUnique({
+      where: { id: applicationId }, include: { opportunity: true }
+    });
+
+    if (!application) throw new NotFoundException('Inscrição não encontrada.');
+    if (application.opportunity.ongId !== ongId) throw new UnauthorizedException('Permissão negada.');
+
+    return this.prisma.application.delete({ where: { id: applicationId } });
+  }
 }

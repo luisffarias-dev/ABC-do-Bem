@@ -159,4 +159,24 @@ export class OpportunitiesController {
       body.horasValidadas,
     );
   }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Delete(':id/apply')
+  @ApiOperation({ summary: 'Cancela a candidatura de um voluntário a uma vaga' })
+  cancelApplication(@Param('id') id: string, @Request() req: any) {
+    const userId = req.user.userId;
+    const role = req.user.role;
+    return this.opportunitiesService.cancelApplication(id, userId, role);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Delete('applications/:applicationId')
+  @ApiOperation({ summary: 'Remove fisicamente um candidato da vaga (Apenas ONG)' })
+  removeApplication(@Param('applicationId') applicationId: string, @Request() req: any) {
+    return this.opportunitiesService.removeApplication(applicationId, req.user.userId, req.user.role);
+  }
+
+  
 }

@@ -271,85 +271,85 @@ class OngPerfilHeader extends StatelessWidget {
       ),
     );
   }
-
-  Widget _buildLinhaRedesETelefone(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0FAF7),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFC2E4DC)),
-      ),
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 10,
-        runSpacing: 8,
-        children: [
+Widget _buildLinhaRedesETelefone(BuildContext context) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF0FAF7),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: const Color(0xFFC2E4DC)),
+    ),
+    child: Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 10,
+      runSpacing: 8,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (ong.instagram != null && ong.instagram!.isNotEmpty)
+              _buildMiniIcon(
+                  context, FontAwesomeIcons.instagram, "Instagram"),
+            if (ong.facebook != null && ong.facebook!.isNotEmpty)
+              _buildMiniIcon(context, FontAwesomeIcons.facebook, "Facebook"),
+            if (ong.linkedin != null && ong.linkedin!.isNotEmpty)
+              _buildMiniIcon(context, FontAwesomeIcons.linkedin, "LinkedIn"),
+            if (ong.whatsapp != null && ong.whatsapp!.isNotEmpty)
+              _buildMiniIcon(context, FontAwesomeIcons.whatsapp, "WhatsApp"),
+          ],
+        ),
+        if (ong.telefone != null && ong.telefone!.isNotEmpty)
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (ong.instagram != null && ong.instagram!.isNotEmpty)
-                _buildMiniIcon(
-                    context, FontAwesomeIcons.instagram, "Instagram"),
-              if (ong.facebook != null && ong.facebook!.isNotEmpty)
-                _buildMiniIcon(context, FontAwesomeIcons.facebook, "Facebook"),
-              if (ong.linkedin != null && ong.linkedin!.isNotEmpty)
-                _buildMiniIcon(context, FontAwesomeIcons.linkedin, "LinkedIn"),
-              if (ong.whatsapp != null && ong.whatsapp!.isNotEmpty)
-                _buildMiniIcon(context, FontAwesomeIcons.whatsapp, "WhatsApp"),
+              const Icon(
+                Icons.phone_outlined,
+                size: 14,
+                color: Color(0xFF0C6B6B),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                ong.telefone!,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF062222),
+                ),
+              ),
             ],
           ),
-          if (ong.telefone != null && ong.telefone!.isNotEmpty)
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.phone_outlined,
-                  size: 14,
-                  color: Color(0xFF0C6B6B),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  ong.telefone!,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF062222),
-                  ),
-                ),
-              ],
+      ],
+    ),
+  );
+}
+
+// Método auxiliar atualizado com FaIconData
+Widget _buildMiniIcon(BuildContext context, FaIconData icon, String label) {
+  return InkWell(
+    onTap: () {
+      // Mantenha aqui a sua lógica de clique nas redes
+    },
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FaIcon(icon, size: 14, color: const Color(0xFF0C6B6B)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF0C6B6B),
+              fontWeight: FontWeight.w500,
             ),
+          ),
         ],
       ),
-    );
-  }
-
-  Widget _buildMiniIcon(BuildContext context, IconData icon, String nomeRede) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
-      child: InkWell(
-        onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("Acessando canal do $nomeRede..."),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        },
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFF9FE8D8)),
-          ),
-          child: FaIcon(icon, size: 14, color: const Color(0xFF0C6B6B)),
-        ),
-      ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildMatchCard() {
     return Container(

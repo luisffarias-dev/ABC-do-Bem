@@ -165,6 +165,9 @@ model Message {
   sender   User @relation("SentMessages", fields: [senderId], references: [id])
   receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id])
 
+  deletedForSender   Boolean @default(false)
+  deletedForReceiver Boolean @default(false)
+
   createdAt DateTime @default(now())
 }
 

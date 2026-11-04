@@ -1,23 +1,22 @@
-name: abc_do_bem
+name: frontend
 description: "A new Flutter project."
 publish_to: 'none'
 
 version: 1.0.0+1
 
 environment:
-  sdk: '>=2.19.0 <4.0.0'
+  sdk: '>=3.2.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
-  mask_text_input_formatter: ^2.9.0
+
   flutter_map: ^7.0.2
-  latlong2: ^0.9.1
-  supabase_flutter: ^2.8.0
-  http: ^1.6.0
+  font_awesome_flutter: ^11.0.0
+  http: ^1.2.2
   image_picker: ^1.1.2
-  flutter_social_button: ^1.1.6
-  cupertino_icons: ^1.0.6
+  latlong2: ^0.9.1
+  mask_text_input_formatter: ^2.9.0
 
 dev_dependencies:
   flutter_test:
@@ -26,13 +25,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
-  assets:
-    - assets/images/logo_abcdobem.png
-
-  fonts:
-    - family: Quicksand
-      fonts:
-        - asset: assets/fonts/Quicksand-Regular.ttf
-        - asset: assets/fonts/Quicksand-Bold.ttf
-          weight: 700
