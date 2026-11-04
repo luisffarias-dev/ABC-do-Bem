@@ -59,4 +59,13 @@ export class ChatController {
     const userId = req.user.userId;
     return this.chatService.markAsRead(userId, otherUserId);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Delete('conversations/:id')
+  @ApiOperation({ summary: 'Limpa a conversa (Soft Hide) apenas para o utilizador que solicitou' })
+  hideConversation(@Param('id') otherUserId: string, @Request() req: any) {
+    const userId = req.user.userId;
+    return this.chatService.hideConversation(userId, otherUserId);
+  }
 }

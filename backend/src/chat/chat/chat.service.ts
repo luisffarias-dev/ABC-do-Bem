@@ -21,14 +21,17 @@ export class ChatService {
   }
 
   // 2. Buscar o histórico de conversa com paginação (?page=1&limit=30)
+  // 2. Buscar o histórico de conversa com paginação (Ocultando mensagens apagadas pelo usuário)
   async getChatHistory(userId: string, otherUserId: string, page: number = 1, limit: number = 30) {
     const skip = (page - 1) * limit;
 
     const messages = await this.prisma.message.findMany({
       where: {
         OR: [
-          { senderId: userId, receiverId: otherUserId },
-          { senderId: otherUserId, receiverId: userId },
+          // Se eu enviei, só trago se eu não tiver apagado
+          { senderId: userId, receiverId: otherUserId, deletedForSender: false },
+          // Se eu recebi, só trago se eu não tiver apagado
+          { senderId: otherUserId, receiverId: userId, deletedForReceiver: false },
         ],
       },
       orderBy: { createdAt: 'asc' }, // Cronológico ascendente
@@ -42,13 +45,15 @@ export class ChatService {
     return messages;
   }
 
-  // 3. Buscar a lista de conversas (Inbox) com a estrutura exata do contrato
+  // 3. Buscar a lista de conversas (Inbox) com a estrutura exata do contrato (Filtrando as ocultas)
   async getConversations(userId: string) {
     const messages = await this.prisma.message.findMany({
       where: {
         OR: [
-          { senderId: userId },
-          { receiverId: userId },
+          // Traz mensagens que enviei e não apaguei
+          { senderId: userId, deletedForSender: false },
+          // Traz mensagens que recebi e não apaguei
+          { receiverId: userId, deletedForReceiver: false },
         ],
       },
       orderBy: { createdAt: 'desc' },
@@ -103,5 +108,22 @@ export class ChatService {
         read: true,
       },
     });
+  }
+
+  // Aplicar Soft Hide na conversa
+  async hideConversation(userId: string, otherUserId: string) {
+    // Se fui eu que enviei, marco deletedForSender = true
+    await this.prisma.message.updateMany({
+      where: { senderId: userId, receiverId: otherUserId },
+      data: { deletedForSender: true },
+    });
+
+    // Se fui eu que recebi, marco deletedForReceiver = true
+    await this.prisma.message.updateMany({
+      where: { senderId: otherUserId, receiverId: userId },
+      data: { deletedForReceiver: true },
+    });
+
+    return { message: 'Conversa limpa com sucesso.' };
   }
 }
