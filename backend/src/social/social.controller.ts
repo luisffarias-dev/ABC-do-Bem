@@ -4,6 +4,10 @@ import { SocialService } from './social.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateVolunteerExperienceDto } from './dto/create-volunteer-experience.dto';
 import { CreateOngPostDto } from './dto/create-ong-post.dto';
+import { Query } from '@nestjs/common'; // Lembre-se de importar o Query no topo
+import { ApiQuery } from '@nestjs/swagger'; // Adicionar ao import do Swagger
+
+
 
 @ApiTags('Social (Feed, Experiências e Seguidores)')
 @Controller('social')
@@ -79,5 +83,23 @@ export class SocialController {
   unfollowOng(@Param('ongId') ongId: string, @Request() req: any) {
     const volunteerId = req.user.userId;
     return this.socialService.unfollowOng(volunteerId, ongId);
+  }
+
+  // ==========================================
+  // ROTAS: FEED UNIFICADO (HOME DO APP)
+  // ==========================================
+
+  @Get('feed')
+  @ApiOperation({ summary: 'Retorna o feed unificado da Comunidade (ONGs e Voluntários)' })
+  @ApiQuery({ name: 'dias', required: false, type: Number, description: 'Postagens dos últimos X dias (padrão 10)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Limite de itens retornados (padrão 20)' })
+  getUnifiedFeed(
+    @Query('dias') dias?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const diasNumber = dias ? parseInt(dias, 10) : 10;
+    const limitNumber = limit ? parseInt(limit, 10) : 20;
+    
+    return this.socialService.getUnifiedFeed(diasNumber, limitNumber);
   }
 }
