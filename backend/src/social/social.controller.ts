@@ -1,13 +1,9 @@
-import { Controller, Get, Post, Body, Param, Delete, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Param, Delete, UseGuards, Request, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { SocialService } from './social.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateVolunteerExperienceDto } from './dto/create-volunteer-experience.dto';
 import { CreateOngPostDto } from './dto/create-ong-post.dto';
-import { Query } from '@nestjs/common'; // Lembre-se de importar o Query no topo
-import { ApiQuery } from '@nestjs/swagger'; // Adicionar ao import do Swagger
-
-
 
 @ApiTags('Social (Feed, Experiências e Seguidores)')
 @Controller('social')
@@ -43,6 +39,15 @@ export class SocialController {
     return this.socialService.deleteExperience(id, userId);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('voluntarios/experiencias/:id/like')
+  @ApiOperation({ summary: 'Curte ou descurte um relato de experiência' })
+  toggleLikeExperience(@Param('id') experienceId: string, @Request() req: any) {
+    const userId = req.user.userId;
+    return this.socialService.toggleLikeExperience(userId, experienceId);
+  }
+
   // ==========================================
   // ROTAS: ONGS (MURAL DE POSTAGENS)
   // ==========================================
@@ -61,6 +66,15 @@ export class SocialController {
   @ApiOperation({ summary: 'Lista as novidades/postagens do mural da ONG' })
   getOngPosts(@Param('ongId') ongId: string) {
     return this.socialService.getOngPosts(ongId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('ongs/postagens/:id/like')
+  @ApiOperation({ summary: 'Curte ou descurte uma postagem de ONG' })
+  toggleLikeOngPost(@Param('id') postId: string, @Request() req: any) {
+    const userId = req.user.userId;
+    return this.socialService.toggleLikeOngPost(userId, postId);
   }
 
   // ==========================================
@@ -96,10 +110,14 @@ export class SocialController {
   getUnifiedFeed(
     @Query('dias') dias?: string,
     @Query('limit') limit?: string,
+    @Request() req?: any,
   ) {
     const diasNumber = dias ? parseInt(dias, 10) : 10;
     const limitNumber = limit ? parseInt(limit, 10) : 20;
     
-    return this.socialService.getUnifiedFeed(diasNumber, limitNumber);
+    // Opcional: Se houver token JWT no header, pega o ID para retornar se o utilizador curtiu
+    const currentUserId = req?.user?.userId;
+    
+    return this.socialService.getUnifiedFeed(diasNumber, limitNumber, currentUserId);
   }
 }

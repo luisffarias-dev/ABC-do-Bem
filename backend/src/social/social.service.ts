@@ -24,6 +24,10 @@ export class SocialService {
     return this.prisma.volunteerExperience.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
+      include: {
+        _count: { select: { likes: true } },
+        likes: { where: { userId }, select: { id: true } }
+      }
     });
   }
 
@@ -54,6 +58,10 @@ export class SocialService {
     return this.prisma.ongPost.findMany({
       where: { ongId },
       orderBy: { createdAt: 'desc' },
+      include: {
+        _count: { select: { likes: true } },
+        likes: { where: { userId: ongId }, select: { id: true } } // Nota: pode ser ajustado para o id de quem consulta se necessário
+      }
     });
   }
 
@@ -93,34 +101,75 @@ export class SocialService {
   }
 
   // ==========================================
+  // 3.1 SISTEMA DE CURTIDAS (LIKES)
+  // ==========================================
+
+  async toggleLikeOngPost(userId: string, postId: string) {
+    const post = await this.prisma.ongPost.findUnique({ where: { id: postId } });
+    if (!post) throw new NotFoundException('Postagem não encontrada.');
+
+    const existingLike = await this.prisma.ongPostLike.findUnique({
+      where: { userId_postId: { userId, postId } }
+    });
+
+    if (existingLike) {
+      await this.prisma.ongPostLike.delete({ where: { id: existingLike.id } });
+      return { liked: false, message: 'Curtida removida.' };
+    } else {
+      await this.prisma.ongPostLike.create({ data: { userId, postId } });
+      return { liked: true, message: 'Post curtido com sucesso.' };
+    }
+  }
+
+  async toggleLikeExperience(userId: string, experienceId: string) {
+    const experience = await this.prisma.volunteerExperience.findUnique({ where: { id: experienceId } });
+    if (!experience) throw new NotFoundException('Experiência não encontrada.');
+
+    const existingLike = await this.prisma.volunteerExperienceLike.findUnique({
+      where: { userId_experienceId: { userId, experienceId } }
+    });
+
+    if (existingLike) {
+      await this.prisma.volunteerExperienceLike.delete({ where: { id: existingLike.id } });
+      return { liked: false, message: 'Curtida removida.' };
+    } else {
+      await this.prisma.volunteerExperienceLike.create({ data: { userId, experienceId } });
+      return { liked: true, message: 'Experiência curtida com sucesso.' };
+    }
+  }
+
+  // ==========================================
   // 4. FEED UNIFICADO (COMUNIDADE)
   // ==========================================
 
-  async getUnifiedFeed(dias: number = 10, limit: number = 20) {
-    // Calcula a data de corte
+  async getUnifiedFeed(dias: number = 10, limit: number = 20, currentUserId?: string) {
     const dateThreshold = new Date();
     dateThreshold.setDate(dateThreshold.getDate() - dias);
 
-    // 1. Busca os relatos dos voluntários com os dados do autor em paralelo
     const experiencesPromise = this.prisma.volunteerExperience.findMany({
       where: { createdAt: { gte: dateThreshold } },
-      include: { user: { select: { id: true, name: true, avatar: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: limit, // Pega o limite máximo possível para garantir a cota
-    });
-
-    // 2. Busca as postagens das ONGs com os dados do autor em paralelo
-    const ongPostsPromise = this.prisma.ongPost.findMany({
-      where: { createdAt: { gte: dateThreshold } },
-      include: { ong: { select: { id: true, name: true, avatar: true } } },
+      include: { 
+        user: { select: { id: true, name: true, avatar: true } },
+        _count: { select: { likes: true } },
+        likes: currentUserId ? { where: { userId: currentUserId }, select: { id: true } } : false,
+      },
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
 
-    // Aguarda ambas as consultas terminarem
+    const ongPostsPromise = this.prisma.ongPost.findMany({
+      where: { createdAt: { gte: dateThreshold } },
+      include: { 
+        ong: { select: { id: true, name: true, avatar: true } },
+        _count: { select: { likes: true } },
+        likes: currentUserId ? { where: { userId: currentUserId }, select: { id: true } } : false,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+
     const [experiences, ongPosts] = await Promise.all([experiencesPromise, ongPostsPromise]);
 
-    // 3. Mapeamento padronizado (Voluntários)
     const mappedExperiences = experiences.map((exp) => ({
       id: exp.id,
       tipoAutor: 'VOLUNTARIO',
@@ -129,11 +178,12 @@ export class SocialService {
       autorFoto: exp.user.avatar,
       texto: exp.text,
       imagemUrl: exp.imageUrl,
-      iniciativa: exp.ongName, // A ONG onde fez o voluntariado
+      iniciativa: exp.ongName, 
       createdAt: exp.createdAt,
+      likesCount: exp._count.likes,
+      isLiked: currentUserId ? exp.likes.length > 0 : false,
     }));
 
-    // 4. Mapeamento padronizado (ONGs)
     const mappedPosts = ongPosts.map((post) => ({
       id: post.id,
       tipoAutor: 'ONG',
@@ -142,11 +192,12 @@ export class SocialService {
       autorFoto: post.ong.avatar,
       texto: post.text,
       imagemUrl: post.imageUrl,
-      iniciativa: post.title, // Usa o título da postagem como iniciativa
+      iniciativa: post.title, 
       createdAt: post.createdAt,
+      likesCount: post._count.likes,
+      isLiked: currentUserId ? post.likes.length > 0 : false,
     }));
 
-    // 5. Junta, ordena de forma decrescente pela data e aplica o limite final
     return [...mappedExperiences, ...mappedPosts]
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, limit);
