@@ -1,10 +1,11 @@
 import { 
-  Controller, Get, Body, Patch, Param, Query, UseGuards, Request 
+  Controller, Get, Body, Patch, Param, Query, UseGuards, Request, UnauthorizedException 
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { UpdateOngDto } from './dto/update-ong.dto'; // Adicione no topo
 
 @ApiTags('Users (Perfis e Dashboard)')
 @Controller('users')
@@ -78,5 +79,29 @@ export class UsersController {
     
     // Chama o serviço que atualizámos
     return this.usersService.getDashboardData(userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch('ongs/me')
+  @ApiOperation({ summary: 'Atualiza o perfil da ONG autenticada' })
+  @ApiBody({ type: UpdateOngDto })
+  async updateOngProfile(@Request() req: any, @Body() dto: UpdateOngDto) {
+    // Validação opcional: garantir que quem chama a rota é realmente uma ONG
+    if (req.user.role !== 'ONG') {
+      throw new UnauthorizedException('Apenas ONGs podem aceder a esta rota.');
+    }
+    return this.usersService.updateOng(req.user.userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('dashboard/ong')
+  @ApiOperation({ summary: 'Carrega os indicadores do painel principal da ONG' })
+  async getOngDashboard(@Request() req: any) {
+    if (req.user.role !== 'ONG') {
+      throw new UnauthorizedException('Apenas ONGs podem aceder ao dashboard institucional.');
+    }
+    return this.usersService.getOngDashboard(req.user.userId);
   }
 }

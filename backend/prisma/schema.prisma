@@ -19,13 +19,14 @@ enum Role {
 }
 
 enum ApplicationStatus {
-  PENDING // Voluntário pediu para participar (Aguardando ONG)
-  CONFIRMED // ONG aceitou
-  REJECTED // ONG recusou ou não tem mais vaga
-  COMPLETED // Evento passou e o voluntário compareceu
-  CANCELLED // Voluntário desistiu
-  PRESENT // NOVO: Confirmou presença no dia
-  ABSENT // NOVO: Faltou no dia
+  PENDING    // Voluntário pediu para participar (Aguardando ONG)
+  CONFIRMED  // ONG aceitou
+  REJECTED   // ONG recusou ou não tem mais vaga
+  COMPLETED  // Evento passou e o voluntário compareceu
+  CANCELLED  // Voluntário desistiu
+  PRESENT    // Confirmou presença no dia
+  ABSENT     // Faltou no dia
+  ACCEPTED   // --- NOVO: Adicionado para suportar aprovação pelo painel (Dashboard)
 }
 
 // ==========================================
@@ -51,6 +52,10 @@ model User {
   aceiteTermos Boolean @default(false)
   aceiteLgpd   Boolean @default(false)
 
+  // --- NOVO: Campos para Confirmação de Email ---
+  pendingEmail           String?
+  emailConfirmationToken String?
+
   // --- CAMPOS EXCLUSIVOS: VOLUNTÁRIO (Role.USER) ---
   tipoDocumento   String?
   cpf             String?  @unique
@@ -61,22 +66,26 @@ model User {
   disponibilidade String[]
 
   // --- CAMPOS EXCLUSIVOS: ONG (Role.ONG) ---
-  razaoSocial         String?
-  cnpj                String?  @unique
-  anoFundacao         Int?
-  site                String?
-  telefoneFixo        String?
-  whatsapp            String?
-  instagram           String?
-  facebook            String?
-  tiktok              String?
-  causaPrincipal      String?
-  servicosOferecidos  String[]
-  publicoAtendido     String[]
-  descricao           String?
-  habilidadesBuscadas String[]
-  formatoVoluntariado String?
-  aceitaDoacoes       String[]
+  razaoSocial               String?
+  cnpj                      String?  @unique
+  anoFundacao               Int?
+  site                      String?
+  telefoneFixo              String?
+  whatsapp                  String?
+  instagram                 String?
+  facebook                  String?
+  tiktok                    String?
+  causaPrincipal            String?
+  servicosOferecidos        String[]
+  publicoAtendido           String[]
+  descricao                 String?
+  habilidadesBuscadas       String[]
+  formatoVoluntariado       String?
+  aceitaDoacoes             String[]
+  // --- NOVOS CAMPOS EXCLUSIVOS: ONG ---
+  necessidadesAtuais        String[]
+  chavePix                  String?
+  horarioRecebimentoDoacoes String?
 
   // --- Relacionamentos Originais ---
   opportunities    Opportunity[] @relation("OngOpportunities")
@@ -84,12 +93,16 @@ model User {
   sentMessages     Message[]     @relation("SentMessages")
   receivedMessages Message[]     @relation("ReceivedMessages")
 
-  // --- NOVOS Relacionamentos (Feed, Notificações e Seguidores) ---
+  // --- Relacionamentos (Feed, Notificações e Seguidores) ---
   notifications        Notification[]
   volunteerExperiences VolunteerExperience[]
   ongPosts             OngPost[]
   followers            OngFollower[]         @relation("OngToFollower")
   following            OngFollower[]         @relation("VolunteerToOng")
+  
+  // --- NOVOS Relacionamentos (Curtidas) ---
+  ongPostLikes         OngPostLike[]
+  experienceLikes      VolunteerExperienceLike[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -109,6 +122,14 @@ model Opportunity {
   totalVacancies Int
   categories     String[]
 
+  // --- NOVOS CAMPOS: Modalidade e Regras ---
+  modality       String    @default("PRESENCIAL") // "PRESENCIAL", "REMOTO", "HIBRIDO"
+  endDate        DateTime?
+  requiredSkills String[]
+  minAge         Int?
+  requirements   String[]
+  status         String    @default("ATIVA") // "ATIVA", "LOTADA", "CONCLUIDA", "CANCELADA"
+
   cep        String?
   logradouro String?
   numero     String?
@@ -122,6 +143,9 @@ model Opportunity {
   ong   User   @relation("OngOpportunities", fields: [ongId], references: [id], onDelete: Cascade)
 
   applications Application[]
+  
+  // --- NOVO: Relacionamento com posts do mural (divulgação do evento) ---
+  ongPosts     OngPost[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -141,10 +165,15 @@ model Application {
 
   status ApplicationStatus @default(PENDING)
 
-  // --- NOVOS CAMPOS: Suporte e Validação de Horas ---
+  // --- CAMPOS ORIGINAIS: Suporte e Validação de Horas ---
   caronaOuSuporte  String?
   autorizouContato Boolean @default(true)
   horasValidadas   Int     @default(0)
+
+  // --- NOVOS CAMPOS: Sistema de Carona Específico e Validação de Presença ---
+  attended         Boolean @default(false)
+  tipoCarona     String? @default("NENHUMA") // "NENHUMA", "PRECISA_CARONA", "OFERECE_CARONA"
+  detalhesCarona String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -172,7 +201,7 @@ model Message {
 }
 
 // ==========================================
-// NOVAS TABELAS (NOTIFICAÇÕES E FEED SOCIAL)
+// TABELAS (NOTIFICAÇÕES E FEED SOCIAL)
 // ==========================================
 
 // 1. Notificações do Sistema
@@ -202,6 +231,9 @@ model VolunteerExperience {
   imageUrl      String?
   formattedDate String // Ex: "Novembro/2026"
 
+  // --- NOVO: Curtidas ---
+  likes         VolunteerExperienceLike[]
+
   createdAt DateTime @default(now())
 }
 
@@ -214,6 +246,11 @@ model OngPost {
   title    String
   text     String
   imageUrl String?
+
+  // --- NOVO: Vínculo ao evento e Curtidas ---
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  likes         OngPostLike[]
 
   createdAt DateTime @default(now())
 }
@@ -230,4 +267,34 @@ model OngFollower {
   createdAt DateTime @default(now())
 
   @@unique([ongId, volunteerId]) // Um voluntário só segue a mesma ONG uma vez
+}
+
+// ==========================================
+// NOVAS TABELAS: SISTEMA DE CURTIDAS (SOCIAL)
+// ==========================================
+
+model OngPostLike {
+  id        String   @id @default(uuid())
+  userId    String   // Quem curtiu
+  postId    String   // O post curtido
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      OngPost  @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId]) // O utilizador só pode curtir o mesmo post uma vez
+}
+
+model VolunteerExperienceLike {
+  id           String   @id @default(uuid())
+  userId       String
+  experienceId String
+  
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  experience   VolunteerExperience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, experienceId])
 }

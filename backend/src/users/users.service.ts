@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateOngDto } from './dto/update-ong.dto';
 
 @Injectable()
 export class UsersService {
@@ -160,5 +161,90 @@ export class UsersService {
 
   return voluntarios;
 }
+
+// ==========================================
+  // ATUALIZAR PERFIL DA ONG
+  // ==========================================
+  async updateOng(id: string, dto: UpdateOngDto) {
+    const user = await this.prisma.user.findUnique({ where: { id, role: 'ONG' } });
+    if (!user) throw new NotFoundException('ONG não encontrada');
+    
+    const { email, ...updateData } = dto;
+    const dataToUpdate: any = { ...updateData };
+
+    if (email && email !== user.email) {
+      const token = Math.floor(100000 + Math.random() * 900000).toString(); 
+      dataToUpdate.pendingEmail = email;
+      dataToUpdate.emailConfirmationToken = token;
+      console.log(`[SIMULAÇÃO] Enviar código ${token} para confirmar o novo e-mail da ONG ${email}`);
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id },
+      data: dataToUpdate,
+    });
+    
+    const { password, ...result } = updatedUser;
+    
+    if (dataToUpdate.pendingEmail) {
+      return { 
+        ...result, 
+        message: 'Perfil atualizado parcialmente. Verifique a sua caixa de entrada para confirmar o novo e-mail antes de ele ficar ativo.' 
+      };
+    }
+
+    return result;
+  }
+
+  // ==========================================
+  // DASHBOARD DA ONG
+  // ==========================================
+  async getOngDashboard(ongId: string) {
+    // 1. Total de voluntários engajados (Candidaturas ACEITES)
+    const totalVoluntariosEngajados = await this.prisma.application.count({
+      where: {
+        opportunity: { ongId },
+        status: 'ACCEPTED' 
+      }
+    });
+
+    // 2. Vagas abertas (Soma das vagas disponíveis em eventos ATIVOS)
+    const eventosAtivos = await this.prisma.opportunity.findMany({
+      where: { ongId, status: 'ATIVA' },
+      select: { 
+        totalVacancies: true, 
+        _count: { select: { applications: { where: { status: 'ACCEPTED' } } } } 
+      }
+    });
+    
+    let vagasAbertas = 0;
+    eventosAtivos.forEach((evento: any) => { // <-- O ": any" resolve o erro do "_count"
+      const vagasRestantes = evento.totalVacancies - evento._count.applications;
+      vagasAbertas += vagasRestantes > 0 ? vagasRestantes : 0;
+    });
+
+    // 3. Horas Geradas (Soma das horas de eventos CONCLUÍDOS pela ONG)
+    const eventosConcluidos = await this.prisma.opportunity.findMany({
+      where: { ongId, status: 'CONCLUIDA' },
+      select: { durationHours: true }
+    });
+    const horasGeradas = eventosConcluidos.reduce((acc, evento) => acc + evento.durationHours, 0);
+
+    // 4. Candidaturas Pendentes (Aguardando análise da ONG)
+    const candidaturasPendentesCount = await this.prisma.application.count({
+      where: {
+        opportunity: { ongId },
+        status: 'PENDING'
+      }
+    });
+
+    return {
+      totalVoluntariosEngajados,
+      vagasAbertas,
+      horasGeradas,
+      candidaturasPendentesCount
+    };
+  }
+
 
 }
