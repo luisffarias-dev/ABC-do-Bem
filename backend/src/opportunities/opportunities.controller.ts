@@ -1,13 +1,15 @@
 import { 
   Controller, Get, Post, Body, Patch, Param, Delete, Query, 
-  ParseFloatPipe, ParseIntPipe, UseGuards, Request 
+  ParseFloatPipe, UseGuards, Request 
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery, ApiParam, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { OpportunitiesService } from './opportunities.service';
 import { CreateOpportunityDto } from './dto/create-opportunity.dto';
 import { UpdateOpportunityDto } from './dto/update-opportunity.dto';
+import { ApplyOpportunityDto } from './dto/apply-opportunity.dto';
+import { UpdateApplicationStatusDto } from './dto/update-application-status.dto';
+import { ValidatePresenceDto } from './dto/validate-presence.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'; 
-import { ApplicationStatus } from '@prisma/client';
 
 @ApiTags('Opportunities (Vagas)')
 @Controller('opportunities')
@@ -33,10 +35,15 @@ export class OpportunitiesController {
   @Post(':id/apply')
   @ApiOperation({ summary: 'Inscreve o voluntário logado em uma vaga específica (Apenas Voluntário)' })
   @ApiParam({ name: 'id', description: 'ID da Vaga' })
-  apply(@Param('id') id: string, @Request() req: any) {
+  @ApiBody({ type: ApplyOpportunityDto })
+  apply(
+    @Param('id') id: string, 
+    @Request() req: any,
+    @Body() applyOpportunityDto: ApplyOpportunityDto
+  ) {
     const userId = req.user.userId; 
     const role = req.user.role; 
-    return this.opportunitiesService.applyToOpportunity(id, userId, role);
+    return this.opportunitiesService.applyToOpportunity(id, userId, role, applyOpportunityDto);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -76,8 +83,7 @@ export class OpportunitiesController {
   // ROTAS PÚBLICAS (Qualquer um pode ver o feed)
   // ==========================================
 
-  // Mantendo a funcionalidade de Vitrine com indicação de Candidatura
-  @UseGuards(JwtAuthGuard) // Remover se quiser vitrine pública, manter se a app exige login na home
+  @UseGuards(JwtAuthGuard) 
   @ApiBearerAuth()
   @Get()
   @ApiOperation({ summary: 'Lista vagas (feed), aceita filtros de cidade e categoria. Verifica se o voluntário está inscrito.' })
@@ -132,31 +138,32 @@ export class OpportunitiesController {
   @ApiBearerAuth()
   @Patch('applications/:applicationId/status')
   @ApiOperation({ summary: 'Aceita ou rejeita um candidato (Apenas ONG)' })
+  @ApiBody({ type: UpdateApplicationStatusDto })
   updateApplicationStatus(
     @Param('applicationId') applicationId: string,
-    @Body('status') status: ApplicationStatus, 
+    @Body() dto: UpdateApplicationStatusDto, 
     @Request() req: any
   ) {
     const ongId = req.user.userId;
     const role = req.user.role;
-    return this.opportunitiesService.updateApplicationStatus(applicationId, ongId, role, status);
+    return this.opportunitiesService.updateApplicationStatus(applicationId, ongId, role, dto.status);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Patch('applications/:applicationId/presenca')
   @ApiOperation({ summary: 'Valida a presença do voluntário no dia do evento (Gera horas)' })
+  @ApiBody({ type: ValidatePresenceDto })
   async validatePresence(
     @Param('applicationId') applicationId: string,
-    @Body() body: { status: ApplicationStatus; horasValidadas: number },
+    @Body() dto: ValidatePresenceDto,
     @Request() req: any,
   ) {
     const ongId = req.user.userId;
     return this.opportunitiesService.validatePresence(
       applicationId,
       ongId,
-      body.status,
-      body.horasValidadas,
+      dto
     );
   }
 
@@ -177,6 +184,4 @@ export class OpportunitiesController {
   removeApplication(@Param('applicationId') applicationId: string, @Request() req: any) {
     return this.opportunitiesService.removeApplication(applicationId, req.user.userId, req.user.role);
   }
-
-  
 }
