@@ -10,6 +10,7 @@ import { ChatModule } from './chat/chat.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SocialModule } from './social/social.module';
 import { AdminModule } from './admin/admin.module';
+import { CertificatesModule } from './certificates/certificates.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { AdminModule } from './admin/admin.module';
     NotificationsModule,
     SocialModule,
     AdminModule,
+    CertificatesModule,
 
   ],
   controllers: [], // Removido o AppController padrão
