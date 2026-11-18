@@ -172,8 +172,14 @@ model Application {
 
   // --- NOVOS CAMPOS: Sistema de Carona Específico e Validação de Presença ---
   attended         Boolean @default(false)
-  tipoCarona     String? @default("NENHUMA") // "NENHUMA", "PRECISA_CARONA", "OFERECE_CARONA"
-  detalhesCarona String?
+  tipoCarona       String? @default("NENHUMA") // "NENHUMA", "PRECISA_CARONA", "OFERECE_CARONA"
+  detalhesCarona   String?
+
+  // --- NOVOS CAMPOS: Feedback da ONG e Certificado ---
+  feedbackOng       String?
+  certificateCode   String?   @unique
+  certificateIssued Boolean   @default(false)
+  certificateDate   DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

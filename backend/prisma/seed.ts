@@ -52,7 +52,7 @@ async function main() {
   // Limpa também os usuários remanescentes do ABC para recriar com senhas e coordenadas padronizadas
   await prisma.user.deleteMany({});
 
-  const defaultPassword = await bcrypt.hash('123456', 10);
+  const defaultPassword = await bcrypt.hash('SenhaForte@123', 10);
 
   console.log('🏢 Criando ONGs do Grande ABC...');
 

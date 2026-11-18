@@ -10,6 +10,8 @@ import { UpdateOpportunityDto } from './dto/update-opportunity.dto';
 import { ApplyOpportunityDto } from './dto/apply-opportunity.dto';
 import { ValidatePresenceDto } from './dto/validate-presence.dto';
 import { ApplicationStatus } from '@prisma/client';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { randomBytes } from 'crypto';
 
 interface RecommendationResult {
   opportunityId: string;
@@ -367,7 +369,7 @@ export class OpportunitiesService {
   }
 
   // ==========================================
-  // 11. VALIDAR PRESENÇA NO EVENTO
+  // 11. VALIDAR PRESENÇA E FEEDBACK NO EVENTO
   // ==========================================
   async validatePresence(applicationId: string, ongId: string, dto: ValidatePresenceDto) {
     const application = await this.prisma.application.findUnique({
@@ -389,6 +391,7 @@ export class OpportunitiesService {
         status: dto.attended ? 'PRESENT' : 'ABSENT',
         attended: dto.attended,
         horasValidadas: dto.attended ? application.opportunity.durationHours : 0,
+        ...(dto.feedbackOng !== undefined && { feedbackOng: dto.feedbackOng }),
       },
     });
   }
@@ -601,10 +604,236 @@ export class OpportunitiesService {
       applicationStatus: app.status,
       attended: app.attended,
       horasValidadas: app.horasValidadas,
+      feedbackOng: app.feedbackOng,
+      certificateIssued: app.certificateIssued,
+      certificateCode: app.certificateCode,
       tipoCarona: app.tipoCarona,
       detalhesCarona: app.detalhesCarona,
       appliedAt: app.createdAt,
       opportunity: app.opportunity,
     }));
+  }
+
+  // ==========================================
+  // 16. FINALIZAR EVENTO E EMITIR CERTIFICADOS EM LOTE (Ação da ONG)
+  // ==========================================
+  async finalizeAndIssueCertificates(opportunityId: string, ongId: string, userRole: string) {
+    if (userRole !== 'ONG') {
+      throw new UnauthorizedException('Apenas ONGs podem finalizar eventos e emitir certificados.');
+    }
+
+    const opportunity = await this.prisma.opportunity.findUnique({
+      where: { id: opportunityId },
+      include: {
+        ong: { select: { name: true } },
+        applications: {
+          where: {
+            OR: [{ status: 'PRESENT' }, { attended: true }],
+          },
+          include: {
+            user: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+
+    if (!opportunity) throw new NotFoundException('Vaga não encontrada.');
+    if (opportunity.ongId !== ongId) {
+      throw new UnauthorizedException('Você só pode finalizar os seus próprios eventos.');
+    }
+
+    // 1. Encerra definitivamente o evento
+    await this.prisma.opportunity.update({
+      where: { id: opportunityId },
+      data: { status: 'CONCLUIDA' },
+    });
+
+    if (opportunity.applications.length === 0) {
+      return {
+        message: 'Evento finalizado com sucesso, mas nenhum voluntário teve presença confirmada para emissão de certificado.',
+        issuedCount: 0,
+      };
+    }
+
+    const now = new Date();
+    const year = now.getFullYear();
+    let issuedCount = 0;
+
+    // 2. Gera código único e notifica cada participante presente
+    for (const app of opportunity.applications) {
+      const code =
+        app.certificateCode ||
+        `ABC-${year}-${randomBytes(3).toString('hex').toUpperCase()}`;
+
+      await this.prisma.application.update({
+        where: { id: app.id },
+        data: {
+          certificateCode: code,
+          certificateIssued: true,
+          certificateDate: app.certificateDate || now,
+          horasValidadas: app.horasValidadas || opportunity.durationHours,
+        },
+      });
+
+      // Evita duplicar notificação se a ONG clicar duas vezes no botão
+      if (!app.certificateIssued) {
+        await this.prisma.notification.create({
+          data: {
+            userId: app.userId,
+            title: '🎓 Certificado Disponível!',
+            message: `Parabéns! Seu certificado de ${opportunity.durationHours}h pela participação em "${opportunity.title}" (${opportunity.ong.name}) já está disponível para download.`,
+            type: 'CERTIFICATE_READY',
+            linkId: app.id, // ID da application para baixar direto o PDF
+          },
+        });
+        issuedCount++;
+      }
+    }
+
+    return {
+      message: `Evento finalizado e ${issuedCount} certificado(s) emitido(s) com sucesso!`,
+      totalPresent: opportunity.applications.length,
+      newlyIssued: issuedCount,
+    };
+  }
+
+  // ==========================================
+  // 17. BAIXAR CERTIFICADO EM PDF (Voluntário ou ONG)
+  // ==========================================
+  async generateCertificatePdf(applicationId: string, requesterId: string): Promise<{ buffer: Buffer; filename: string }> {
+    const application = await this.prisma.application.findUnique({
+      where: { id: applicationId },
+      include: {
+        user: { select: { id: true, name: true, cpf: true } },
+        opportunity: {
+          include: {
+            ong: { select: { id: true, name: true, razaoSocial: true, cnpj: true } },
+          },
+        },
+      },
+    });
+
+    if (!application) throw new NotFoundException('Inscrição não encontrada.');
+
+    // Garante que apenas o próprio voluntário ou a ONG organizadora baixe o PDF
+    const isOwnerVolunteer = application.userId === requesterId;
+    const isOwnerOng = application.opportunity.ongId === requesterId;
+    if (!isOwnerVolunteer && !isOwnerOng) {
+      throw new UnauthorizedException('Você não tem permissão para acessar este certificado.');
+    }
+
+    if (!application.certificateIssued || !application.certificateCode) {
+      throw new ConflictException('O certificado ainda não foi emitido pela ONG para esta participação.');
+    }
+
+    // Cria PDF em formato A4 Paisagem (Landscape)
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage([841.89, 595.28]);
+    const { width, height } = page.getSize();
+
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+    // Moldura externa azul/verde institucional
+    page.drawRectangle({
+      x: 28,
+      y: 28,
+      width: width - 56,
+      height: height - 56,
+      borderColor: rgb(0.11, 0.45, 0.36),
+      borderWidth: 3,
+    });
+
+    page.drawRectangle({
+      x: 38,
+      y: 38,
+      width: width - 76,
+      height: height - 76,
+      borderColor: rgb(0.75, 0.85, 0.82),
+      borderWidth: 1,
+    });
+
+    // Cabeçalho
+    page.drawText('ABC DO BEM - PLATAFORMA DE VOLUNTARIADO', {
+      x: 70,
+      y: height - 95,
+      size: 12,
+      font: fontBold,
+      color: rgb(0.11, 0.45, 0.36),
+    });
+
+    page.drawText('CERTIFICADO DE PARTICIPAÇÃO VOLUNTÁRIA', {
+      x: 70,
+      y: height - 140,
+      size: 24,
+      font: fontBold,
+      color: rgb(0.12, 0.16, 0.22),
+    });
+
+    // Corpo do texto
+    const horas = application.horasValidadas || application.opportunity.durationHours;
+    const eventDateFormatted = new Date(application.opportunity.eventDate).toLocaleDateString('pt-BR');
+    const cidade = application.opportunity.cidade || 'Grande ABC';
+    const ongNome = application.opportunity.ong.razaoSocial || application.opportunity.ong.name;
+
+    page.drawText('Certificamos que', {
+      x: 70,
+      y: height - 205,
+      size: 14,
+      font: fontRegular,
+      color: rgb(0.3, 0.35, 0.4),
+    });
+
+    page.drawText(application.user.name.toUpperCase(), {
+      x: 70,
+      y: height - 240,
+      size: 22,
+      font: fontBold,
+      color: rgb(0.11, 0.45, 0.36),
+    });
+
+    const linhas = [
+      `participou como voluntário(a) da ação "${application.opportunity.title}",`,
+      `promovida por ${ongNome} (CNPJ: ${application.opportunity.ong.cnpj || 'Não informado'}),`,
+      `realizada em ${eventDateFormatted} na cidade de ${cidade} - SP,`,
+      `totalizando carga horária de ${horas} hora(s) de atividades comunitárias.`,
+    ];
+
+    linhas.forEach((linha, index) => {
+      page.drawText(linha, {
+        x: 70,
+        y: height - 290 - index * 26,
+        size: 13,
+        font: fontRegular,
+        color: rgb(0.2, 0.24, 0.3),
+      });
+    });
+
+    // Feedback da ONG (se houver)
+    if (application.feedbackOng) {
+      page.drawText(`Reconhecimento da ONG: "${application.feedbackOng.slice(0, 95)}"`, {
+        x: 70,
+        y: height - 415,
+        size: 11,
+        font: fontRegular,
+        color: rgb(0.35, 0.4, 0.45),
+      });
+    }
+
+    // Rodapé com código de autenticidade
+    const issuedDateFormatted = new Date(application.certificateDate || new Date()).toLocaleDateString('pt-BR');
+    page.drawText(`Emitido em ${issuedDateFormatted} | Código de Autenticidade: ${application.certificateCode}`, {
+      x: 70,
+      y: 70,
+      size: 10,
+      font: fontBold,
+      color: rgb(0.35, 0.4, 0.45),
+    });
+
+    const pdfBytes = await pdfDoc.save();
+    return {
+      buffer: Buffer.from(pdfBytes),
+      filename: `certificado-${application.certificateCode}.pdf`,
+    };
   }
 }

@@ -1,7 +1,8 @@
 import { 
   Controller, Get, Post, Body, Patch, Param, Delete, Query, 
-  ParseFloatPipe, UseGuards, Request 
+  ParseFloatPipe, UseGuards, Request, Res 
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiQuery, ApiParam, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { OpportunitiesService } from './opportunities.service';
 import { CreateOpportunityDto } from './dto/create-opportunity.dto';
@@ -17,7 +18,7 @@ export class OpportunitiesController {
   constructor(private readonly opportunitiesService: OpportunitiesService) {}
 
   // ==========================================
-  // 1. ROTAS DA ONG (Gestão de Vagas, Status e Candidatos)
+  // 1. ROTAS DA ONG (Gestão de Vagas, Status, Candidatos e Certificados)
   // ==========================================
 
   @UseGuards(JwtAuthGuard)
@@ -78,7 +79,7 @@ export class OpportunitiesController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Patch('applications/:applicationId/presenca')
-  @ApiOperation({ summary: '[ONG] Valida a presença do voluntário no dia do evento (Gera horas)' })
+  @ApiOperation({ summary: '[ONG] Valida a presença e feedback do voluntário no dia do evento (Gera horas)' })
   @ApiBody({ type: ValidatePresenceDto })
   async validatePresence(
     @Param('applicationId') applicationId: string,
@@ -90,6 +91,14 @@ export class OpportunitiesController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @Post(':id/finalize-certificates')
+  @ApiOperation({ summary: '[ONG] Finaliza o evento, emite certificados para todos os presentes e envia notificações' })
+  finalizeAndIssueCertificates(@Param('id') id: string, @Request() req: any) {
+    return this.opportunitiesService.finalizeAndIssueCertificates(id, req.user.userId, req.user.role);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @Delete('applications/:applicationId')
   @ApiOperation({ summary: '[ONG] Remove fisicamente um candidato da vaga' })
   removeApplication(@Param('applicationId') applicationId: string, @Request() req: any) {
@@ -97,7 +106,7 @@ export class OpportunitiesController {
   }
 
   // ==========================================
-  // 2. ROTAS DO VOLUNTÁRIO (Exploração, IA e Inscrições)
+  // 2. ROTAS DO VOLUNTÁRIO (Exploração, IA, Inscrições e Certificados)
   // ==========================================
 
   @UseGuards(JwtAuthGuard) 
@@ -136,6 +145,37 @@ export class OpportunitiesController {
     return this.opportunitiesService.getRecommendedOpportunities(req.user.userId);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('my-applications')
+  @ApiOperation({ summary: '[Voluntário] Lista todas as vagas em que o voluntário logado se inscreveu (Minhas Vagas)' })
+  getMyApplications(@Request() req: any) {
+    return this.opportunitiesService.getMyApplications(req.user.userId, req.user.role);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('applications/:applicationId/certificate')
+  @ApiOperation({ summary: '[Voluntário] Baixa o certificado em PDF de uma participação concluída' })
+  async downloadCertificate(
+    @Param('applicationId') applicationId: string,
+    @Request() req: any,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename } = await this.opportunitiesService.generateCertificatePdf(
+      applicationId,
+      req.user.userId,
+    );
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+
+    res.end(buffer);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: '[Voluntário] Exibe os detalhes de uma única vaga' })
   findOne(@Param('id') id: string) {
@@ -162,14 +202,5 @@ export class OpportunitiesController {
   @ApiOperation({ summary: '[Voluntário] Cancela a candidatura de um voluntário a uma vaga' })
   cancelApplication(@Param('id') id: string, @Request() req: any) {
     return this.opportunitiesService.cancelApplication(id, req.user.userId, req.user.role);
-  }
-
-
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @Get('my-applications')
-  @ApiOperation({ summary: '[Voluntário] Lista todas as vagas em que o voluntário logado se inscreveu (Minhas Vagas)' })
-  getMyApplications(@Request() req: any) {
-    return this.opportunitiesService.getMyApplications(req.user.userId, req.user.role);
   }
 }
