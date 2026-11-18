@@ -1,8 +1,8 @@
-import { 
-  Injectable, 
-  NotFoundException, 
-  UnauthorizedException, 
-  ConflictException 
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOpportunityDto } from './dto/create-opportunity.dto';
@@ -46,7 +46,7 @@ export class OpportunitiesService {
         ...(cidade && { cidade: { contains: cidade, mode: 'insensitive' } }),
         ...(categoria && { categories: { has: categoria } }),
         eventDate: { gte: new Date() },
-        status: 'ATIVA' // Só retorna vagas ativas no feed geral
+        status: 'ATIVA', // Só retorna vagas ativas no feed geral
       },
       include: {
         ong: { select: { name: true, avatar: true } },
@@ -56,14 +56,14 @@ export class OpportunitiesService {
     });
 
     if (!userId) {
-      return opportunities.map(opp => ({
+      return opportunities.map((opp) => ({
         ...opp,
         isApplied: false,
         applicationStatus: null,
       }));
     }
 
-    const oppIds = opportunities.map(o => o.id);
+    const oppIds = opportunities.map((o) => o.id);
     const userApplications = await this.prisma.application.findMany({
       where: {
         userId: userId,
@@ -73,15 +73,15 @@ export class OpportunitiesService {
     });
 
     const applicationMap = new Map(
-      userApplications.map(app => [app.opportunityId, app.status])
+      userApplications.map((app) => [app.opportunityId, app.status]),
     );
 
-    return opportunities.map(opp => {
+    return opportunities.map((opp) => {
       const status = applicationMap.get(opp.id);
       return {
         ...opp,
-        isApplied: !!status, 
-        applicationStatus: status || null, 
+        isApplied: !!status,
+        applicationStatus: status || null,
       };
     });
   }
@@ -114,7 +114,7 @@ export class OpportunitiesService {
       ORDER BY "distance_km" ASC
       LIMIT 15;
     `);
-    
+
     return opportunities;
   }
 
@@ -122,10 +122,24 @@ export class OpportunitiesService {
   // 4. LISTAR VAGAS DE UMA ONG ESPECÍFICA (PAINEL)
   // ==========================================
   async findByOng(ongId: string) {
+    // Encerra automaticamente vagas ativas ou lotadas cuja data já passou
+    await this.prisma.opportunity.updateMany({
+      where: {
+        ongId,
+        status: { in: ['ATIVA', 'LOTADA'] },
+        eventDate: { lt: new Date() },
+      },
+      data: { status: 'CONCLUIDA' },
+    });
+
     return this.prisma.opportunity.findMany({
       where: { ongId },
       include: {
-        _count: { select: { applications: { where: { status: { in: ['PENDING', 'ACCEPTED'] } } } } },
+        _count: {
+          select: {
+            applications: { where: { status: { in: ['PENDING', 'ACCEPTED'] } } },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -138,7 +152,15 @@ export class OpportunitiesService {
     const opportunity = await this.prisma.opportunity.findUnique({
       where: { id },
       include: {
-        ong: { select: { name: true, descricao: true, avatar: true, telefoneFixo: true, whatsapp: true } },
+        ong: {
+          select: {
+            name: true,
+            descricao: true,
+            avatar: true,
+            telefoneFixo: true,
+            whatsapp: true,
+          },
+        },
       },
     });
     if (!opportunity) throw new NotFoundException('Vaga não encontrada');
@@ -155,14 +177,16 @@ export class OpportunitiesService {
 
     const opportunity = await this.prisma.opportunity.findUnique({ where: { id } });
     if (!opportunity) throw new NotFoundException('Vaga não encontrada');
-    if (opportunity.ongId !== ongId) throw new UnauthorizedException('Você só pode editar suas próprias vagas');
+    if (opportunity.ongId !== ongId) {
+      throw new UnauthorizedException('Você só pode editar suas próprias vagas');
+    }
 
     return this.prisma.opportunity.update({
       where: { id },
       data: {
         ...dto,
         ...(dto.eventDate && { eventDate: new Date(dto.eventDate) }),
-        ...(dto.endDate && { endDate: new Date(dto.endDate) })
+        ...(dto.endDate && { endDate: new Date(dto.endDate) }),
       },
     });
   }
@@ -177,31 +201,41 @@ export class OpportunitiesService {
 
     const opportunity = await this.prisma.opportunity.findUnique({ where: { id } });
     if (!opportunity) throw new NotFoundException('Vaga não encontrada');
-    if (opportunity.ongId !== ongId) throw new UnauthorizedException('Você só pode deletar suas próprias vagas');
+    if (opportunity.ongId !== ongId) {
+      throw new UnauthorizedException('Você só pode deletar suas próprias vagas');
+    }
 
     return this.prisma.opportunity.delete({ where: { id } });
   }
 
   // ==========================================
-  // 8. CANDIDATAR-SE (Com Carona e Validação de Idade)
+  // 8. CANDIDATAR-SE (Com Carona e Validação de Lotação)
   // ==========================================
-  async applyToOpportunity(opportunityId: string, userId: string, userRole: string, dto: ApplyOpportunityDto) {
+  async applyToOpportunity(
+    opportunityId: string,
+    userId: string,
+    userRole: string,
+    dto: ApplyOpportunityDto,
+  ) {
     if (userRole !== 'USER') {
       throw new UnauthorizedException('Acesso negado. Apenas voluntários podem se candidatar a vagas.');
     }
 
     const opportunity = await this.prisma.opportunity.findUnique({
       where: { id: opportunityId },
-      include: { 
+      include: {
         ong: true,
-        _count: { select: { applications: { where: { status: 'ACCEPTED' } } } }
+        _count: { select: { applications: { where: { status: 'ACCEPTED' } } } },
       },
     });
 
     if (!opportunity) throw new NotFoundException('Vaga não encontrada');
-    
-    // Regra de Negócio: Lotação
-    if (opportunity.status !== 'ATIVA' || opportunity._count.applications >= opportunity.totalVacancies) {
+
+    // Regra de Negócio: Lotação ou Evento Encerrado
+    if (
+      opportunity.status !== 'ATIVA' ||
+      opportunity._count.applications >= opportunity.totalVacancies
+    ) {
       throw new ConflictException('Infelizmente, esta vaga já está lotada ou encerrada.');
     }
 
@@ -236,9 +270,9 @@ export class OpportunitiesService {
         },
       });
 
-      return { 
-        message: 'Candidatura realizada com sucesso!', 
-        application 
+      return {
+        message: 'Candidatura realizada com sucesso!',
+        application,
       };
     } catch (error) {
       if (error.code === 'P2002') {
@@ -267,26 +301,37 @@ export class OpportunitiesService {
       include: {
         opportunity: { select: { id: true, title: true, eventDate: true, durationHours: true } },
         user: {
-          select: { 
-            id: true, name: true, avatar: true, email: true, telefone: true, habilidades: true, cidade: true 
-          }
-        }
+          select: {
+            id: true,
+            name: true,
+            avatar: true,
+            email: true,
+            telefone: true,
+            habilidades: true,
+            cidade: true,
+          },
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
   // ==========================================
-  // 10. MUDAR O STATUS DA INSCRIÇÃO (APROVAR/RECUSAR)
+  // 10. MUDAR O STATUS DA INSCRIÇÃO (APROVAR/RECUSAR + AUTO-LOTAÇÃO)
   // ==========================================
-  async updateApplicationStatus(applicationId: string, ongId: string, userRole: string, status: ApplicationStatus) {
+  async updateApplicationStatus(
+    applicationId: string,
+    ongId: string,
+    userRole: string,
+    status: ApplicationStatus,
+  ) {
     if (userRole !== 'ONG') {
       throw new UnauthorizedException('Acesso negado. Apenas ONGs gerenciam inscrições.');
     }
 
     const application = await this.prisma.application.findUnique({
       where: { id: applicationId },
-      include: { opportunity: true, user: true }
+      include: { opportunity: true, user: true },
     });
 
     if (!application) throw new NotFoundException('Inscrição não encontrada.');
@@ -296,8 +341,15 @@ export class OpportunitiesService {
 
     const updated = await this.prisma.application.update({
       where: { id: applicationId },
-      data: { status }
+      data: { status },
     });
+
+    // Sincroniza automaticamente o status da vaga (ATIVA <-> LOTADA)
+    await this.syncOpportunityVacancyStatus(
+      application.opportunityId,
+      application.opportunity.totalVacancies,
+      application.opportunity.status,
+    );
 
     // Notificar voluntário sobre o resultado da análise
     const statusMsg = status === 'ACCEPTED' ? 'foi APROVADA' : 'foi RECUSADA';
@@ -334,7 +386,7 @@ export class OpportunitiesService {
     return this.prisma.application.update({
       where: { id: applicationId },
       data: {
-        status: dto.attended ? 'PRESENT' : 'ABSENT', 
+        status: dto.attended ? 'PRESENT' : 'ABSENT',
         attended: dto.attended,
         horasValidadas: dto.attended ? application.opportunity.durationHours : 0,
       },
@@ -347,7 +399,14 @@ export class OpportunitiesService {
   async getRecommendedOpportunities(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, habilidades: true, cidade: true, estado: true },
+      select: {
+        id: true,
+        habilidades: true,
+        bio: true,
+        nascimento: true,
+        cidade: true,
+        estado: true,
+      },
     });
 
     if (!user) throw new NotFoundException('Usuário não encontrado');
@@ -356,17 +415,28 @@ export class OpportunitiesService {
       where: { userId },
       select: { opportunityId: true },
     });
-    const appliedOppIds = existingApplications.map(app => app.opportunityId);
+    const appliedOppIds = existingApplications.map((app) => app.opportunityId);
 
     const opportunities = await this.prisma.opportunity.findMany({
       where: {
-        id: { notIn: appliedOppIds }, 
+        id: { notIn: appliedOppIds },
         eventDate: { gte: new Date() },
-        status: 'ATIVA' 
+        status: 'ATIVA',
       },
       select: {
-        id: true, title: true, description: true, categories: true,
-        cidade: true, estado: true, latitude: true, longitude: true,
+        id: true,
+        title: true,
+        description: true,
+        categories: true,
+        requiredSkills: true,
+        modality: true,
+        minAge: true,
+        status: true,
+        eventDate: true,
+        cidade: true,
+        estado: true,
+        latitude: true,
+        longitude: true,
       },
     });
 
@@ -374,12 +444,18 @@ export class OpportunitiesService {
 
     try {
       const flaskUrl = process.env.FLASK_ML_URL || 'http://localhost:5000/recommend';
-      
+
       const flaskResponse = await fetch(flaskUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user: { habilidades: user.habilidades, cidade: user.cidade, estado: user.estado },
+          user: {
+            habilidades: user.habilidades,
+            bio: user.bio,
+            nascimento: user.nascimento,
+            cidade: user.cidade,
+            estado: user.estado,
+          },
           opportunities: opportunities,
         }),
       });
@@ -387,7 +463,7 @@ export class OpportunitiesService {
       const recommendations = (await flaskResponse.json()) as RecommendationResult[];
 
       const scoreMap = new Map<string, number>(
-        recommendations.map((r) => [r.opportunityId, r.score])
+        recommendations.map((r) => [r.opportunityId, r.score]),
       );
 
       const result = opportunities
@@ -396,7 +472,7 @@ export class OpportunitiesService {
           const score = scoreMap.get(opp.id) ?? 0;
           return {
             ...opp,
-            matchScore: Math.round(score * 100), 
+            matchScore: Math.round(score * 100),
           };
         })
         .sort((a, b) => b.matchScore - a.matchScore);
@@ -418,6 +494,7 @@ export class OpportunitiesService {
 
     const application = await this.prisma.application.findUnique({
       where: { userId_opportunityId: { userId, opportunityId } },
+      include: { opportunity: true },
     });
 
     if (!application) {
@@ -428,6 +505,12 @@ export class OpportunitiesService {
       where: { id: application.id },
     });
 
+    await this.syncOpportunityVacancyStatus(
+      opportunityId,
+      application.opportunity.totalVacancies,
+      application.opportunity.status,
+    );
+
     return { message: 'Candidatura cancelada com sucesso.' };
   }
 
@@ -436,14 +519,50 @@ export class OpportunitiesService {
   // ==========================================
   async removeApplication(applicationId: string, ongId: string, userRole: string) {
     if (userRole !== 'ONG') throw new UnauthorizedException('Apenas ONGs podem remover inscrições.');
-    
+
     const application = await this.prisma.application.findUnique({
-      where: { id: applicationId }, include: { opportunity: true }
+      where: { id: applicationId },
+      include: { opportunity: true },
     });
 
     if (!application) throw new NotFoundException('Inscrição não encontrada.');
-    if (application.opportunity.ongId !== ongId) throw new UnauthorizedException('Permissão negada.');
+    if (application.opportunity.ongId !== ongId) {
+      throw new UnauthorizedException('Permissão negada.');
+    }
 
-    return this.prisma.application.delete({ where: { id: applicationId } });
+    const deleted = await this.prisma.application.delete({ where: { id: applicationId } });
+
+    await this.syncOpportunityVacancyStatus(
+      application.opportunityId,
+      application.opportunity.totalVacancies,
+      application.opportunity.status,
+    );
+
+    return deleted;
+  }
+
+  // ==========================================
+  // AUXILIAR: SINCRONIZA LOTAÇÃO (ATIVA <-> LOTADA)
+  // ==========================================
+  private async syncOpportunityVacancyStatus(
+    opportunityId: string,
+    totalVacancies: number,
+    currentStatus: string,
+  ) {
+    const acceptedCount = await this.prisma.application.count({
+      where: { opportunityId, status: 'ACCEPTED' },
+    });
+
+    if (acceptedCount >= totalVacancies && currentStatus === 'ATIVA') {
+      await this.prisma.opportunity.update({
+        where: { id: opportunityId },
+        data: { status: 'LOTADA' },
+      });
+    } else if (acceptedCount < totalVacancies && currentStatus === 'LOTADA') {
+      await this.prisma.opportunity.update({
+        where: { id: opportunityId },
+        data: { status: 'ATIVA' },
+      });
+    }
   }
 }

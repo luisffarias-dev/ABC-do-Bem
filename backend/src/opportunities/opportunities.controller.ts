@@ -11,82 +11,99 @@ import { UpdateApplicationStatusDto } from './dto/update-application-status.dto'
 import { ValidatePresenceDto } from './dto/validate-presence.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'; 
 
-@ApiTags('Opportunities (Vagas)')
+@ApiTags('Opportunities')
 @Controller('opportunities')
 export class OpportunitiesController {
   constructor(private readonly opportunitiesService: OpportunitiesService) {}
 
   // ==========================================
-  // ROTAS PROTEGIDAS (Exigem Token JWT)
+  // 1. ROTAS DA ONG (Gestão de Vagas, Status e Candidatos)
   // ==========================================
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth() 
   @Post() 
-  @ApiOperation({ summary: 'Cria uma nova vaga de voluntariado (Apenas ONG)' })
+  @ApiOperation({ summary: '[ONG] Cria uma nova vaga de voluntariado' })
   create(@Request() req: any, @Body() createOpportunityDto: CreateOpportunityDto) {
-    const ongId = req.user.userId;
-    const role = req.user.role; 
-    return this.opportunitiesService.create(ongId, createOpportunityDto, role);
+    return this.opportunitiesService.create(req.user.userId, createOpportunityDto, req.user.role);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @Post(':id/apply')
-  @ApiOperation({ summary: 'Inscreve o voluntário logado em uma vaga específica (Apenas Voluntário)' })
-  @ApiParam({ name: 'id', description: 'ID da Vaga' })
-  @ApiBody({ type: ApplyOpportunityDto })
-  apply(
-    @Param('id') id: string, 
-    @Request() req: any,
-    @Body() applyOpportunityDto: ApplyOpportunityDto
-  ) {
-    const userId = req.user.userId; 
-    const role = req.user.role; 
-    return this.opportunitiesService.applyToOpportunity(id, userId, role, applyOpportunityDto);
+  @Get('ong/:ongId')
+  @ApiOperation({ summary: '[ONG] Lista todas as vagas publicadas por uma ONG específica' })
+  findByOng(@Param('ongId') ongId: string) {
+    return this.opportunitiesService.findByOng(ongId);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Patch(':id') 
-  @ApiOperation({ summary: 'Atualiza os dados de uma vaga (Apenas ONG)' })
+  @ApiOperation({ summary: '[ONG] Atualiza os dados ou status (ATIVA, LOTADA, CONCLUIDA, CANCELADA) de uma vaga' })
   update(
     @Param('id') id: string,
     @Request() req: any,
     @Body() updateOpportunityDto: UpdateOpportunityDto,
   ) {
-    const ongId = req.user.userId;
-    const role = req.user.role;
-    return this.opportunitiesService.update(id, ongId, updateOpportunityDto, role);
+    return this.opportunitiesService.update(id, req.user.userId, updateOpportunityDto, req.user.role);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Delete(':id') 
-  @ApiOperation({ summary: 'Exclui uma vaga (Apenas ONG)' })
+  @ApiOperation({ summary: '[ONG] Exclui uma vaga' })
   remove(@Param('id') id: string, @Request() req: any) {
-    const ongId = req.user.userId;
-    const role = req.user.role;
-    return this.opportunitiesService.remove(id, ongId, role);
+    return this.opportunitiesService.remove(id, req.user.userId, req.user.role);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @Get('recommended')
-  @ApiOperation({ summary: 'Retorna vagas recomendadas para o voluntário logado com base em IA/ML' })
-  async getRecommended(@Request() req: any) {
-    const userId = req.user.userId;
-    return this.opportunitiesService.getRecommendedOpportunities(userId);
+  @Get(':id/applications')
+  @ApiOperation({ summary: '[ONG] Lista os voluntários inscritos em uma vaga' })
+  getApplications(@Param('id') id: string, @Request() req: any) {
+    return this.opportunitiesService.getApplications(id, req.user.userId, req.user.role);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch('applications/:applicationId/status')
+  @ApiOperation({ summary: '[ONG] Aceita ou rejeita a candidatura de um voluntário' })
+  @ApiBody({ type: UpdateApplicationStatusDto })
+  updateApplicationStatus(
+    @Param('applicationId') applicationId: string,
+    @Body() dto: UpdateApplicationStatusDto, 
+    @Request() req: any
+  ) {
+    return this.opportunitiesService.updateApplicationStatus(applicationId, req.user.userId, req.user.role, dto.status);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch('applications/:applicationId/presenca')
+  @ApiOperation({ summary: '[ONG] Valida a presença do voluntário no dia do evento (Gera horas)' })
+  @ApiBody({ type: ValidatePresenceDto })
+  async validatePresence(
+    @Param('applicationId') applicationId: string,
+    @Body() dto: ValidatePresenceDto,
+    @Request() req: any,
+  ) {
+    return this.opportunitiesService.validatePresence(applicationId, req.user.userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Delete('applications/:applicationId')
+  @ApiOperation({ summary: '[ONG] Remove fisicamente um candidato da vaga' })
+  removeApplication(@Param('applicationId') applicationId: string, @Request() req: any) {
+    return this.opportunitiesService.removeApplication(applicationId, req.user.userId, req.user.role);
   }
 
   // ==========================================
-  // ROTAS PÚBLICAS (Qualquer um pode ver o feed)
+  // 2. ROTAS DO VOLUNTÁRIO (Exploração, IA e Inscrições)
   // ==========================================
 
   @UseGuards(JwtAuthGuard) 
   @ApiBearerAuth()
   @Get()
-  @ApiOperation({ summary: 'Lista vagas (feed), aceita filtros de cidade e categoria. Verifica se o voluntário está inscrito.' })
+  @ApiOperation({ summary: '[Voluntário] Lista vagas ativas (feed) com filtros de cidade e categoria' })
   @ApiQuery({ name: 'cidade', required: false })
   @ApiQuery({ name: 'categoria', required: false })
   findAll(
@@ -94,12 +111,11 @@ export class OpportunitiesController {
     @Query('categoria') categoria?: string,
     @Request() req?: any
   ) {
-    const userId = req?.user?.userId;
-    return this.opportunitiesService.findAll(cidade, categoria, userId);
+    return this.opportunitiesService.findAll(cidade, categoria, req?.user?.userId);
   }
 
   @Get('nearby')
-  @ApiOperation({ summary: 'GEOLOCALIZAÇÃO: Retorna as vagas mais próximas (Em KM)' })
+  @ApiOperation({ summary: '[Voluntário] Retorna as vagas ativas mais próximas por geolocalização (Em KM)' })
   @ApiQuery({ name: 'lat', type: Number })
   @ApiQuery({ name: 'lng', type: Number })
   @ApiQuery({ name: 'radius', type: Number, required: false })
@@ -112,76 +128,39 @@ export class OpportunitiesController {
     return this.opportunitiesService.findNearby(lat, lng, maxRadius);
   }
 
-  @Get('ong/:ongId')
-  @ApiOperation({ summary: 'Painel da ONG: Lista todas as vagas publicadas por uma ONG específica' })
-  findByOng(@Param('ongId') ongId: string) {
-    return this.opportunitiesService.findByOng(ongId);
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('recommended')
+  @ApiOperation({ summary: '[Voluntário] Retorna vagas recomendadas com base em IA/ML' })
+  async getRecommended(@Request() req: any) {
+    return this.opportunitiesService.getRecommendedOpportunities(req.user.userId);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Exibe os detalhes de uma única vaga' })
+  @ApiOperation({ summary: '[Voluntário] Exibe os detalhes de uma única vaga' })
   findOne(@Param('id') id: string) {
     return this.opportunitiesService.findOne(id);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @Get(':id/applications')
-  @ApiOperation({ summary: 'Lista os voluntários inscritos em uma vaga (Acesso restrito à ONG dona)' })
-  getApplications(@Param('id') id: string, @Request() req: any) {
-    const ongId = req.user.userId;
-    const role = req.user.role;
-    return this.opportunitiesService.getApplications(id, ongId, role);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @Patch('applications/:applicationId/status')
-  @ApiOperation({ summary: 'Aceita ou rejeita um candidato (Apenas ONG)' })
-  @ApiBody({ type: UpdateApplicationStatusDto })
-  updateApplicationStatus(
-    @Param('applicationId') applicationId: string,
-    @Body() dto: UpdateApplicationStatusDto, 
-    @Request() req: any
-  ) {
-    const ongId = req.user.userId;
-    const role = req.user.role;
-    return this.opportunitiesService.updateApplicationStatus(applicationId, ongId, role, dto.status);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @Patch('applications/:applicationId/presenca')
-  @ApiOperation({ summary: 'Valida a presença do voluntário no dia do evento (Gera horas)' })
-  @ApiBody({ type: ValidatePresenceDto })
-  async validatePresence(
-    @Param('applicationId') applicationId: string,
-    @Body() dto: ValidatePresenceDto,
+  @Post(':id/apply')
+  @ApiOperation({ summary: '[Voluntário] Inscreve o voluntário logado em uma vaga específica' })
+  @ApiParam({ name: 'id', description: 'ID da Vaga' })
+  @ApiBody({ type: ApplyOpportunityDto })
+  apply(
+    @Param('id') id: string, 
     @Request() req: any,
+    @Body() applyOpportunityDto: ApplyOpportunityDto
   ) {
-    const ongId = req.user.userId;
-    return this.opportunitiesService.validatePresence(
-      applicationId,
-      ongId,
-      dto
-    );
+    return this.opportunitiesService.applyToOpportunity(id, req.user.userId, req.user.role, applyOpportunityDto);
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Delete(':id/apply')
-  @ApiOperation({ summary: 'Cancela a candidatura de um voluntário a uma vaga' })
+  @ApiOperation({ summary: '[Voluntário] Cancela a candidatura de um voluntário a uma vaga' })
   cancelApplication(@Param('id') id: string, @Request() req: any) {
-    const userId = req.user.userId;
-    const role = req.user.role;
-    return this.opportunitiesService.cancelApplication(id, userId, role);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @Delete('applications/:applicationId')
-  @ApiOperation({ summary: 'Remove fisicamente um candidato da vaga (Apenas ONG)' })
-  removeApplication(@Param('applicationId') applicationId: string, @Request() req: any) {
-    return this.opportunitiesService.removeApplication(applicationId, req.user.userId, req.user.role);
+    return this.opportunitiesService.cancelApplication(id, req.user.userId, req.user.role);
   }
 }
