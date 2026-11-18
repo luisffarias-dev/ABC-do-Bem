@@ -163,4 +163,13 @@ export class OpportunitiesController {
   cancelApplication(@Param('id') id: string, @Request() req: any) {
     return this.opportunitiesService.cancelApplication(id, req.user.userId, req.user.role);
   }
+
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('my-applications')
+  @ApiOperation({ summary: '[Voluntário] Lista todas as vagas em que o voluntário logado se inscreveu (Minhas Vagas)' })
+  getMyApplications(@Request() req: any) {
+    return this.opportunitiesService.getMyApplications(req.user.userId, req.user.role);
+  }
 }

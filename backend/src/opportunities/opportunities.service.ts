@@ -565,4 +565,46 @@ export class OpportunitiesService {
       });
     }
   }
+
+  // ==========================================
+  // 15. LISTAR VAGAS DO VOLUNTÁRIO ("MINHAS VAGAS")
+  // ==========================================
+  async getMyApplications(userId: string, userRole: string) {
+    if (userRole !== 'USER') {
+      throw new UnauthorizedException('Acesso negado. Apenas voluntários possuem candidaturas.');
+    }
+
+    const applications = await this.prisma.application.findMany({
+      where: { userId },
+      include: {
+        opportunity: {
+          include: {
+            ong: {
+              select: {
+                id: true,
+                name: true,
+                avatar: true,
+                telefoneFixo: true,
+                whatsapp: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        opportunity: { eventDate: 'asc' },
+      },
+    });
+
+    return applications.map((app) => ({
+      applicationId: app.id,
+      applicationStatus: app.status,
+      attended: app.attended,
+      horasValidadas: app.horasValidadas,
+      tipoCarona: app.tipoCarona,
+      detalhesCarona: app.detalhesCarona,
+      appliedAt: app.createdAt,
+      opportunity: app.opportunity,
+    }));
+  }
 }
