@@ -79,7 +79,7 @@ export class ChatService {
         ).length;
 
         conversationsMap.set(contactId, {
-          id: contact.id, // ID do participante/sala
+          id: contact.id,
           participant: {
             id: contact.id,
             name: contact.name,
@@ -88,7 +88,9 @@ export class ChatService {
           },
           lastMessage: msg.content,
           lastMessageAt: msg.createdAt,
-          unreadCount: unreadCount, // Inteiro exigido pela especificação
+          isSentByMe: isSender,       // <-- Novo: permite mostrar "Você: ..." no card do chat
+          lastMessageRead: msg.read,  // <-- Novo: permite mostrar check simples/duplo
+          unreadCount: unreadCount,
         });
       }
     }
