@@ -23,20 +23,76 @@ export class OpportunitiesService {
   constructor(private prisma: PrismaService) {}
 
   // ==========================================
-  // 1. CRIAR VAGA
+  // 1. CRIAR VAGA + NOTIFICAR VOLUNTÁRIOS COM MATCH
   // ==========================================
   async create(ongId: string, dto: CreateOpportunityDto, userRole: string) {
     if (userRole !== 'ONG') {
       throw new UnauthorizedException('Acesso negado. Apenas ONGs podem criar vagas.');
     }
-    return this.prisma.opportunity.create({
+
+    const opportunity = await this.prisma.opportunity.create({
       data: {
         ...dto,
         eventDate: new Date(dto.eventDate),
         endDate: dto.endDate ? new Date(dto.endDate) : null,
         ongId,
       },
+      include: {
+        ong: { select: { name: true, cidade: true, causaPrincipal: true } },
+      },
     });
+
+    // Dispara notificações internas para seguidores + voluntários compatíveis (sem travar a criação)
+    try {
+      const followers = await this.prisma.ongFollower.findMany({
+        where: { ongId },
+        select: { volunteerId: true },
+      });
+
+      const skillsAndCategories = Array.from(
+        new Set([...(dto.requiredSkills || []), ...(dto.categories || [])]),
+      );
+
+      const cityFilter = dto.cidade || opportunity.ong.cidade;
+
+      const matchedVolunteers = await this.prisma.user.findMany({
+        where: {
+          role: 'USER',
+          OR: [
+            ...(skillsAndCategories.length > 0
+              ? [{ habilidades: { hasSome: skillsAndCategories } }]
+              : []),
+            ...(cityFilter
+              ? [{ cidade: { contains: cityFilter, mode: 'insensitive' as const } }]
+              : []),
+          ],
+        },
+        select: { id: true },
+        take: 150,
+      });
+
+      const targetUserIds = new Set<string>([
+        ...followers.map((f) => f.volunteerId),
+        ...matchedVolunteers.map((v) => v.id),
+      ]);
+
+      if (targetUserIds.size > 0) {
+        const eventDateFormatted = new Date(opportunity.eventDate).toLocaleDateString('pt-BR');
+        await this.prisma.notification.createMany({
+          data: Array.from(targetUserIds).map((userId) => ({
+            userId,
+            title: '✨ Nova vaga compatível com você!',
+            message: `${opportunity.ong.name} abriu a vaga "${opportunity.title}" para o dia ${eventDateFormatted}. Toque para ver os detalhes e participar!`,
+            type: 'NEW_OPPORTUNITY_MATCH',
+            linkId: opportunity.id,
+          })),
+        });
+      }
+    } catch (err) {
+      console.error('Erro ao disparar notificações de match da vaga:', err);
+    }
+
+    return opportunity;
   }
 
   // ==========================================
