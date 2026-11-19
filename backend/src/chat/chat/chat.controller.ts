@@ -68,4 +68,37 @@ export class ChatController {
     const userId = req.user.userId;
     return this.chatService.hideConversation(userId, otherUserId);
   }
+
+  // ==========================================
+  // ALIASES PARA COMPATIBILIDADE COM O FLUTTER
+  // ==========================================
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('history/:id')
+  @ApiOperation({ summary: '[Alias Flutter] Histórico de mensagens com um contato' })
+  getHistoryAlias(
+    @Param('id') otherUserId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Request() req?: any,
+  ) {
+    const userId = req.user.userId;
+    const pageNumber = page ? parseInt(page, 10) : 1;
+    const limitNumber = limit ? parseInt(limit, 10) : 30;
+    return this.chatService.getChatHistory(userId, otherUserId, pageNumber, limitNumber);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('send')
+  @ApiOperation({ summary: '[Alias Flutter] Envia mensagem usando receiverId e content no body' })
+  sendMessageAlias(
+    @Body('receiverId') receiverId: string,
+    @Body('content') content: string,
+    @Request() req: any,
+  ) {
+    const senderId = req.user.userId;
+    return this.chatService.saveMessage(senderId, receiverId, content);
+  }
 }
