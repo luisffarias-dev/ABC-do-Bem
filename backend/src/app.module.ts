@@ -11,6 +11,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { SocialModule } from './social/social.module';
 import { AdminModule } from './admin/admin.module';
 import { CertificatesModule } from './certificates/certificates.module';
+import { OngsModule } from './ongs/ongs.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { CertificatesModule } from './certificates/certificates.module';
     SocialModule,
     AdminModule,
     CertificatesModule,
+    OngsModule,
 
   ],
   controllers: [], // Removido o AppController padrão

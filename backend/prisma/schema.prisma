@@ -26,7 +26,7 @@ enum ApplicationStatus {
   CANCELLED  // Voluntário desistiu
   PRESENT    // Confirmou presença no dia
   ABSENT     // Faltou no dia
-  ACCEPTED   // --- NOVO: Adicionado para suportar aprovação pelo painel (Dashboard)
+  ACCEPTED   // Adicionado para suportar aprovação pelo painel (Dashboard)
 }
 
 // ==========================================
@@ -52,7 +52,7 @@ model User {
   aceiteTermos Boolean @default(false)
   aceiteLgpd   Boolean @default(false)
 
-  // --- NOVO: Campos para Confirmação de Email ---
+  // --- Campos para Confirmação de Email ---
   pendingEmail           String?
   emailConfirmationToken String?
 
@@ -82,7 +82,6 @@ model User {
   habilidadesBuscadas       String[]
   formatoVoluntariado       String?
   aceitaDoacoes             String[]
-  // --- NOVOS CAMPOS EXCLUSIVOS: ONG ---
   necessidadesAtuais        String[]
   chavePix                  String?
   horarioRecebimentoDoacoes String?
@@ -99,10 +98,16 @@ model User {
   ongPosts             OngPost[]
   followers            OngFollower[]         @relation("OngToFollower")
   following            OngFollower[]         @relation("VolunteerToOng")
-  
-  // --- NOVOS Relacionamentos (Curtidas) ---
-  ongPostLikes         OngPostLike[]
-  experienceLikes      VolunteerExperienceLike[]
+
+  // --- Relacionamentos (Curtidas e Comentários) ---
+  ongPostLikes    OngPostLike[]
+  experienceLikes VolunteerExperienceLike[]
+  ongPostComments OngPostComment[]
+
+  // --- Relacionamentos (Metas, Suprimentos e Compromissos de Doação) ---
+  goals    OngGoal[]      @relation("OngGoals")
+  supplies OngSupply[]    @relation("OngSupplies")
+  pledges  SupplyPledge[] @relation("VolunteerPledges")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -122,7 +127,7 @@ model Opportunity {
   totalVacancies Int
   categories     String[]
 
-  // --- NOVOS CAMPOS: Modalidade e Regras ---
+  // --- Modalidade e Regras ---
   modality       String    @default("PRESENCIAL") // "PRESENCIAL", "REMOTO", "HIBRIDO"
   endDate        DateTime?
   requiredSkills String[]
@@ -143,8 +148,6 @@ model Opportunity {
   ong   User   @relation("OngOpportunities", fields: [ongId], references: [id], onDelete: Cascade)
 
   applications Application[]
-  
-  // --- NOVO: Relacionamento com posts do mural (divulgação do evento) ---
   ongPosts     OngPost[]
 
   createdAt DateTime @default(now())
@@ -165,17 +168,17 @@ model Application {
 
   status ApplicationStatus @default(PENDING)
 
-  // --- CAMPOS ORIGINAIS: Suporte e Validação de Horas ---
+  // --- Suporte e Validação de Horas ---
   caronaOuSuporte  String?
   autorizouContato Boolean @default(true)
   horasValidadas   Int     @default(0)
 
-  // --- NOVOS CAMPOS: Sistema de Carona Específico e Validação de Presença ---
-  attended         Boolean @default(false)
-  tipoCarona       String? @default("NENHUMA") // "NENHUMA", "PRECISA_CARONA", "OFERECE_CARONA"
-  detalhesCarona   String?
+  // --- Sistema de Carona Específico e Validação de Presença ---
+  attended       Boolean @default(false)
+  tipoCarona     String? @default("NENHUMA") // "NENHUMA", "PRECISA_CARONA", "OFERECE_CARONA"
+  detalhesCarona String?
 
-  // --- NOVOS CAMPOS: Feedback da ONG e Certificado ---
+  // --- Feedback da ONG e Certificado ---
   feedbackOng       String?
   certificateCode   String?   @unique
   certificateIssued Boolean   @default(false)
@@ -207,7 +210,7 @@ model Message {
 }
 
 // ==========================================
-// TABELAS (NOTIFICAÇÕES E FEED SOCIAL)
+// TABELAS: NOTIFICAÇÕES E FEED SOCIAL
 // ==========================================
 
 // 1. Notificações do Sistema
@@ -220,8 +223,8 @@ model Notification {
   message String
   read    Boolean @default(false)
 
-  type   String? // Ex: "NEW_MESSAGE", "APPLICATION_APPROVED"
-  linkId String? // ID do evento ou da conversa para o app navegar ao clicar
+  type   String? // Ex: "NEW_MESSAGE", "CERTIFICATE_READY", "SUPPLY_NEEDED", "NEW_PLEDGE", "NEW_OPPORTUNITY_MATCH"
+  linkId String? // ID do recurso relacionado para navegação no app
 
   createdAt DateTime @default(now())
 }
@@ -237,8 +240,7 @@ model VolunteerExperience {
   imageUrl      String?
   formattedDate String // Ex: "Novembro/2026"
 
-  // --- NOVO: Curtidas ---
-  likes         VolunteerExperienceLike[]
+  likes VolunteerExperienceLike[]
 
   createdAt DateTime @default(now())
 }
@@ -253,10 +255,10 @@ model OngPost {
   text     String
   imageUrl String?
 
-  // --- NOVO: Vínculo ao evento e Curtidas ---
   opportunityId String?
-  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  opportunity   Opportunity?     @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   likes         OngPostLike[]
+  comments      OngPostComment[]
 
   createdAt DateTime @default(now())
 }
@@ -272,35 +274,105 @@ model OngFollower {
 
   createdAt DateTime @default(now())
 
-  @@unique([ongId, volunteerId]) // Um voluntário só segue a mesma ONG uma vez
+  @@unique([ongId, volunteerId])
 }
 
-// ==========================================
-// NOVAS TABELAS: SISTEMA DE CURTIDAS (SOCIAL)
-// ==========================================
-
+// 5. Curtidas e Comentários (Social)
 model OngPostLike {
-  id        String   @id @default(uuid())
-  userId    String   // Quem curtiu
-  postId    String   // O post curtido
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  post      OngPost  @relation(fields: [postId], references: [id], onDelete: Cascade)
-  
+  id     String @id @default(uuid())
+  userId String
+  postId String
+
+  user User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post OngPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now())
 
-  @@unique([userId, postId]) // O utilizador só pode curtir o mesmo post uma vez
+  @@unique([userId, postId])
 }
 
 model VolunteerExperienceLike {
-  id           String   @id @default(uuid())
+  id           String @id @default(uuid())
   userId       String
   experienceId String
-  
-  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  experience   VolunteerExperience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
-  
-  createdAt    DateTime @default(now())
+
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  experience VolunteerExperience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
 
   @@unique([userId, experienceId])
+}
+
+model OngPostComment {
+  id      String @id @default(uuid())
+  postId  String
+  userId  String
+  content String
+
+  post OngPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+// ==========================================
+// TABELAS: METAS E MINI-ERP DE SUPRIMENTOS DA ONG
+// ==========================================
+
+model OngGoal {
+  id    String @id @default(uuid())
+  ongId String
+  ong   User   @relation("OngGoals", fields: [ongId], references: [id], onDelete: Cascade)
+
+  titulo      String
+  descricao   String?
+  valorAtual  Float     @default(0)
+  valorMeta   Float
+  unidade     String    // Ex: "cestas", "horas", "kits", "voluntários"
+  prazoLimite DateTime?
+  status      String    @default("EM_ANDAMENTO") // "EM_ANDAMENTO", "CONCLUIDA", "ATRASADA"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OngSupply {
+  id    String @id @default(uuid())
+  ongId String
+  ong   User   @relation("OngSupplies", fields: [ongId], references: [id], onDelete: Cascade)
+
+  nome                String
+  unidade             String    // Ex: "kg", "unidades", "litros", "pacotes"
+  quantidadeMeta      Float
+  quantidadeRecebida  Float     @default(0)
+  quantidadePrometida Float     @default(0)
+  prazoLimite         DateTime?
+  prioridade          String    @default("MEDIA") // "BAIXA", "MEDIA", "ALTA", "URGENTE"
+  status              String    @default("ABERTO") // "ABERTO", "PARCIAL", "ATENDIDO", "CANCELADO"
+  sincronizarPerfil   Boolean   @default(true)
+
+  pledges SupplyPledge[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SupplyPledge {
+  id       String    @id @default(uuid())
+  supplyId String
+  supply   OngSupply @relation(fields: [supplyId], references: [id], onDelete: Cascade)
+
+  volunteerId String?
+  volunteer   User?   @relation("VolunteerPledges", fields: [volunteerId], references: [id], onDelete: SetNull)
+
+  doadorNome        String
+  doadorContato     String?
+  quantidade        Float
+  dataLimiteEntrega DateTime?
+  status            String    @default("PROMETIDO") // "PROMETIDO", "ENTREGUE", "ATRASADO", "CANCELADO"
+  observacoes       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
