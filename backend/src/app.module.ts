@@ -20,7 +20,7 @@ import { OngsModule } from './ongs/ongs.module';
       {
         name: 'default',
         ttl: 60000,
-        limit: 10,
+        limit: 120,
       },
     ]),
     AuthModule,
